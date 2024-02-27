@@ -1,2 +1,2 @@
-# MelODee2
+# MelODees2
 Music Disk on Amiga OCS
