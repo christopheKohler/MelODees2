@@ -1,0 +1,4 @@
+../Tebirod-Earth_sorrow_alt.p61
+Intro.bin
+
+
