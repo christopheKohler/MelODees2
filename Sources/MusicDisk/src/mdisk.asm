@@ -74,6 +74,16 @@ startup:
     move.w #$0c00,$DFF106
     move.w #$0011,$DFF10C
     
+    ; Test chip ram.
+	move.l (LDOS_BASE).w,a6
+	jsr		LDOS_GETMEMBLOCKTABLE(a6) ; d0 = chip, d1 = fast   
+    move.l d0,a0 ; Get table of chip mem. 256 blocks = 512*2 mem, else 128 blocks = 512 Ko
+    cmp.b #$7f,255(a0) ; MEMLABEL_SYSTEM
+    beq .noextrachip
+    move.w #1,haveenoughchip ; Tell the music disk that there are plenty of chip mem :)
+.noextrachip: 
+ 
+    
     bsr AllocateChipMemForParalax ; Allocate 90K at end of chip mem
     
     ; -- Loading first module (same code as in DoLoading !)
@@ -153,7 +163,10 @@ BigLoop: ; ------------------------------------------------------
     lea TEXTSCROLLSTABLE,a0
     add.l d0,a0
     move.l (a0),a0 
-    move.l a0,Scroll1Pointer      
+    move.l a0,Scroll1Pointer
+    ; Test palette alternative
+    bsr LaunchGradientTransition
+    
 .nofirst:    
 
     cmp.w #1,request_loading ; user have request a loading, we wait for "loading" to be there to do the effective load
@@ -598,6 +611,8 @@ LoadingModule:
 .noscrollchange
 	
     ; -- If big module (2), free memory of paralax and stop music
+    cmp.w #1,haveenoughchip
+    beq .nobigmodule
     move.w currentmusic,d0 ; 1 to 8
     cmp.w #2,d0
     bne .nobigmodule
@@ -618,6 +633,8 @@ LoadingModule:
 .nobigmodule:
 
     ; -- If WAS big module (2), free memory of music
+    cmp.w #1,haveenoughchip
+    beq .nobigmodule1b    
     move.w previousmusic,d0 ; 1 to 8
     cmp.w #2,d0
     bne .nobigmodule1b
@@ -717,6 +734,8 @@ LoadingModule:
     move.b #$77,$101 ; Debug
     
     ; If big module (2), then realloc mem for paralax
+    cmp.w #1,haveenoughchip
+    beq .nobigmodule2
     move.w currentmusic,d0 ; 1 to 8
     cmp.w #2,d0
     bne .nobigmodule2
@@ -2366,7 +2385,7 @@ DisplayNamePosIndex:
     even
     
 ;--------------------------------------------------------------- 
-; d0.l id of music 1 to 8
+; d0.l id of music 1 to 8 (9 is loading)
 RequestDisplayMusicName:
     ; -- Get start gui adress bitplan (in a2)
     lea GuiData,a2
@@ -2388,7 +2407,7 @@ RequestDisplayMusicName:
     move.w #-8,DisplayNamePosIndex
     rts
 ; -----------------------------------------------------    
-RequestEraseMusicName    
+RequestEraseMusicName:    
     ; -- Get start gui adress bitplan (in a2)
     lea GuiData,a2
     add.l #(2+2+2+4+32*2),a2 ; Start of bitplan. 5 bitplans. 320x64
@@ -2474,27 +2493,57 @@ DisplayMusicNameWithPattern_sliceloop:
     move.l a1,a4; Dest
     move.l a2,a5; Pattern
     
-    move.l #5-1,d5
-.planes
-    move.l #16-1,d4
-.lines
-    ; Copy 16 lines
-    move.b (a3),d3
-    and.b (a5),d3 ; Apply mask
-    move.b d3,(a4)
+    ; -- First erase slice, so no bitplan decay could appear.
+;    movem.l a0-a5,-(a7)
+;    move.l a1,a2
+;    add.l #40*64,a2
+;    move.l a2,a3
+;    add.l #40*64,a3  
+;    move.l a3,a4
+;    add.l #40*64,a4 
+;    move.l a4,a5
+;    add.l #40*64,a5     
+;    
+;    move.l #16-1,d4
+;.lineserase
+;    ; Copy 16 lines
+;    move.b #0,(a1)
+;    move.b #0,(a2)
+;    move.b #0,(a3)
+;    move.b #0,(a4)
+;    move.b #0,(a5)
+;    add.l #40,a1
+;    add.l #40,a2
+;    add.l #40,a3
+;    add.l #40,a4
+;    add.l #40,a5
+;
+;    dbra d4,.lineserase
+;    movem.l (a7)+,a0-a5
+   
     
-    add.l #25,a3 ; next line source
-    add.l #40,a4 ; next line dest
-    add.l #8,a5 ; Next mask line
+    
+    move.l #5-1,d5 ; -- 5 planes
+.planes
+        move.l #16-1,d4
+.lines
+            ; Copy 16 lines
+            move.b (a3),d3
+            and.b (a5),d3 ; Apply mask
+            move.b d3,(a4)
+            
+            add.l #25,a3 ; next line source
+            add.l #40,a4 ; next line dest
+            add.l #8,a5 ; Next mask line
 
-    dbra d4,.lines
+        dbra d4,.lines
 
-    ; Next plan
-    add.l #25*(NBMODULES+1)*16,a0 ; next plane source ( 9 titles of 16 lines) 25 bytes width
-    add.l #40*64,a1 ; next plane dest
-    move.l a0,a3 ; Src
-    move.l a1,a4 ; Dest    
-    move.l a2,a5 ; Pattern , reset pattern
+        ; Next plan
+        add.l #25*(NBMODULES+1)*16,a0 ; next plane source ( 9 titles of 16 lines) 25 bytes width
+        add.l #40*64,a1 ; next plane dest
+        move.l a0,a3 ; Src
+        move.l a1,a4 ; Dest    
+        move.l a2,a5 ; Pattern , reset pattern
     
     dbra d5,.planes ; 5 planes
 
@@ -3250,7 +3299,8 @@ sizedebugmemplan=12*40
 	jsr		LDOS_GETMEMBLOCKTABLE(a6) ; d0 = chip, d1 = fast   
     move.l d0,a0 ; Get table of chip mem
     lea plansDebugMem+40,a1 ; dest
-    move.l #(128/8)-1,d6 ; 128 blocks
+    ;move.l #(128/8)-1,d6 ; 128 blocks
+    move.l #(256/8)-1,d6 ; 512*2 Kb
 fillDebugMem_mainloop1:
     move.w #7,d7 ; loop on 8 pixels
     moveq #0,d0 ; d0 to d3 for each plan
@@ -3312,7 +3362,8 @@ fillDebugMem_8pixelsloop1:
     ;lea DebugMemData,a0 ; source data
     move.l d1,a0 ; Get table of chip mem
     lea plansDebugMem+40*3,a1 ; dest
-    move.l #(128/8)-1,d6 ; 128 blocks
+    ;move.l #(128/8)-1,d6 ; 128 blocks of 4 Ko
+    move.l #(256/8)-1,d6 ; 192 blocks of 4 Ko
 fillDebugMem_mainloop2:
     move.w #7,d7 ; loop on 8 pixels
     clr.b d0 ; d0 to d3 for each plan
@@ -3332,7 +3383,7 @@ fillDebugMem_8pixelsloop2:
 ;MEMLABEL_PERSISTENT_CHIP=	$78 ; 3 
     cmp.b #0,d5
     beq .isfree
-    sub.b #$77-3,d5 ; remap $78 tp $7f to 3 to 10
+    sub.b #$75,d5 ; remap $78 tp $7f to 3 to 10  .... $78-$74 =
     bra .endcolorremap
 .isfree
     move.b #2,d5; grey
@@ -3757,6 +3808,7 @@ ComputeStepsBackGradient
     dbra d4,.loop  
     rts    
 ;---------------------------------------------------------------
+; 32 Colors palette
 ; d4.w number of colors components (1 color = 3 components)   
 UpdateSteps:
     cmp.b #255,gradient_nbsteps
@@ -3820,7 +3872,8 @@ UpdateSteps:
 UpdateSteps_end:
     rts
    
-; ---------------------------------------------    
+; ---------------------------------------------  
+; 64 colors gradient  
 ; d4 number of colors (1 color = 3 components)   
 UpdateStepsCopper:
     cmp.b #255,gradient_nbsteps
@@ -4565,6 +4618,9 @@ currentmusic: ; Module from 1 to 8
 	dc.w 0 
 previousmusic: ; Module from 1 to 8 (Used to know if last module was a big module)
 	dc.w 0     
+haveenoughchip: ; Have at least 512+256 chip ram ??
+    dc.w 0
+    
     
 flag_do_not_change_scroll:
     dc.b 0
