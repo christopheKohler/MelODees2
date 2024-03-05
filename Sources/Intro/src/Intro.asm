@@ -57,17 +57,17 @@
     ;bra DEBUGFX4
     
     ; -- DEBUG, go to next effect
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_MUSIC_STOP(a6)
-;    move.w #100,d0
-;    bsr WaitFrames ; Wait 2 second (music fade out)    
-;    ; TODO Unalloc Music space
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_FREE_MEM_MUSIC(a6)    
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_PRELOAD_NEXT_FX(a6)
-;    ; we now can terminate this part by RTS. Next part will execute a start music command
-;    rts         ; end of this part
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_MUSIC_STOP(a6)
+    move.w #100,d0
+    bsr WaitFrames ; Wait 2 second (music fade out)    
+    ; TODO Unalloc Music space
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_FREE_MEM_MUSIC(a6)    
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_PRELOAD_NEXT_FX(a6)
+    ; we now can terminate this part by RTS. Next part will execute a start music command
+    rts         ; end of this part
     ; -- end Debug
 
     ; -- FX1 ---------------------------------------------------
@@ -147,14 +147,14 @@ Loop4:
     
     ; Fade out colors. (StepCurrent = 6)
     move.w #0,VBLCount
-    move.w #100,d0
-    bsr WaitFrames ; Wait 2 second (music fade out)  
+    ;move.w #100,d0
+    ;bsr WaitFrames ; Wait 2 second (music fade out)  
     
     ; Stop with fade
 	move.l (LDOS_BASE).w,a6
 	jsr		LDOS_MUSIC_STOP(a6)  ; Stop with fade
-    move.w #100,d0
-    bsr WaitFrames ; Wait 2 second (music fade out)       
+    move.w #10,d0
+    bsr WaitFrames ; Wait a bit (music fade out)       
     ; Unalloc Music space
     move.l	(LDOS_BASE).w,a6
     jsr		LDOS_FREE_MEM_MUSIC(a6)    
@@ -162,7 +162,6 @@ Loop4:
     jsr		LDOS_PRELOAD_NEXT_FX(a6)
     ; we now can terminate this part by RTS. Next part will execute a start music command
     rts ; End main loop, end of FX
-    
 
 StepCurrent:
     dc.w    0 ; 1 = Fx 1, 2 = Fx 2, 3 , 4
@@ -233,7 +232,8 @@ InterruptLevel3:
    
     cmp.w #0,d0
     beq .notrigger
-    bsr BackgroundAnimation_TriggerFrontAnim
+    ;bsr BackgroundAnimation_TriggerFrontAnim
+    bsr BackgroundAnimation_TriggerBackAnim
     ;add.b #1,$100
 .notrigger     
     
@@ -324,6 +324,8 @@ BackPaletteOriginal_Bright:
     dc.w $AAD,$99D,$88C,$77B,$77A,$669,$558 
 BackPaletteOriginal_Dark:
     dc.w $559,$558,$447,$446,$335,$224,$001
+BackPaletteOriginal_Dark2: ; End logo
+    dc.w $667,$556,$546,$445,$334,$223,$000    
 BackPaletteOriginal_DarkFull:
     dc.w $000,$000,$000,$000,$000,$000,$000 
 
@@ -470,7 +472,7 @@ Fx6_Irq:
     ; Erase planes lines.
     ; TOP LINES
     lea BufferChips,a1 ; 87 lines high
-    add.l #((87-64)/2)*40,a1 ; Center Y ; Start.
+    add.l #((87-66)/2)*40,a1 ; Center Y ; Start. use 65 because one line missing
     ; 64 lines on 4 planes.
     ; Each plane 87*40
     clr.l d0
@@ -587,6 +589,19 @@ BackgroundAnimation_SwitchToDarkPalette:
     move.w (a0)+,(a1)+ 
     move.w #7*4,BackGroundCounterScrollPalette
     rts
+    
+BackgroundAnimation_SwitchToDarkPalette2: ; End logo
+    lea BackPaletteOriginal_Dark2,a0
+    lea BackPaletteScrollPalette,a1
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+
+    move.w (a0)+,(a1)+ 
+    move.w #7*4,BackGroundCounterScrollPalette
+    rts    
 
 BackgroundAnimation_SwitchToBrightPalette:
     lea BackPaletteOriginal_Bright,a0
@@ -3294,21 +3309,25 @@ frame:          dc.w    0
 
 Fx4_Init:
 
-    bsr BackgroundAnimation_SwitchToDarkPalette
+    bsr BackgroundAnimation_SwitchToDarkPalette2 ; Switch to dark palette for final logo.
     
-    ; Delete 5 planes of 87 lines.
+    ; Background effect
+    ; bsr SetBackPalette ; useless ?
+    move.w #0,VBLCount ; Reset VBL count.    
+    
+    ; Delete 4 planes of 87 lines.
     bsr waitblitter ; Wait blitter to be ready
 	move.w #0,$dff066			;destination modulo
 	move.l #$01000000,$dff040	;set operation type in BLTCON0/1
 	move.l #BufferChips,a0
     move.l a0,$dff054   ;destination address
-	move.w #(SCREENH*5*64)+(40/2),$dff058 ;blitter operation size 
+	move.w #(SCREENH*4*64)+(40/2),$dff058 ;blitter operation size 
     bsr waitblitter ; Wait blitter to be ready
     
     ; Set planes pointers
     move.l #BufferChips,d0
     lea     copScrSet,a1
-    move.w #5-1,d1
+    move.w #4-1,d1
 .loopsetplanes
     move.w  d0,6(a1)
     swap    d0
@@ -3323,17 +3342,29 @@ Fx4_Init:
     lea copPal+4,a1 ; dest
     add.l #2,a1
     add.l #2,a0 ; skip first color (black)
-    move.w #32-1-1,d0
+    move.w #16-1-1,d0
 .loopcopycolors
     move.w (a0)+,(a1)
     add.l #4,a1
     dbra d0,.loopcopycolors
+    
+    ; Set 4 planes
+    lea Planes87,a0
+    move.w #($0200|(4<<12)),2(a0) ; 4 plane
+    
+    ; Wait a bit so the colors are correct (transition)
+    move.w #50,d0
+    bsr WaitFrames ; Wait 1 second
+    
     ; Set data from ami
     ; copScrSet: 
     ;40*64 per plane
+    lea Logo,a0
+    add.l #2+2+2+4,a0 ; Skip header
+    add.l #16*2,a0 ; skip colors
     lea BufferChips,a1 ; 87 lines high
     add.l #((87-64)/2)*40,a1 ; Center Y
-    move.w #5-1,d4
+    move.w #4-1,d4
 .planes
     ; Copy one plane
     move.w #(40*64)-1,d3
@@ -3342,13 +3373,9 @@ Fx4_Init:
     dbra d3,.copyplane
     add.l #(87-64)*40,a1
     dbra d4,.planes
-    ; Background effect
-    bsr SetBackPalette
-    move.w #0,VBLCount ; Reset VBL count.
+
     
-    ; Set 5 planes
-    lea Planes87,a0
-    move.w #($0200|(5<<12)),2(a0) ; 5 plane
+
     
     rts
 
@@ -3526,7 +3553,7 @@ LetterL:
     even
 
    
-Logo: ; 32 colors, 320x64
+Logo: ; 16 colors, 320x64
         Incbin	"data/logo.ami" 
         
 LogoSmall: ; 8 colors, same as 3D. 288x11 pixels
@@ -3587,7 +3614,7 @@ copPal:
                 dc.l    $01880000,$018a0000,$018c0000,$018e0000
                 dc.l    $01900000,$01920000,$01940000,$01960000
                 dc.l    $01980000,$019a0000,$019c0000,$019e0000
-                dc.l    $01a00000,$01a20000,$01a40000,$01a60000
+                dc.l    $01a00000,$01a20000,$01a40000,$01a60000 ; all colors blacks
                 dc.l    $01a80000,$01aa0000,$01ac0000,$01ae0000
                 dc.l    $01b00000,$01b20000,$01b40000,$01b60000
                 dc.l    $01b80000,$01ba0000,$01bc0000,$01be0000                
@@ -3619,7 +3646,7 @@ copScrSet:
                 dc.l    $00e40000,$00e60000
                 dc.l    $00e80000,$00ea0000
                 dc.l    $00ec0000,$00ee0000
-                dc.l    $00f00000,$00f20000
+                ;dc.l    $00f00000,$00f20000 ; We only need 4 plans
 Planes87:
                 dc.l	$01000200 | (2 <<12)
                 dc.l	$01080000
@@ -4018,12 +4045,12 @@ SpriteLine2:
 ; 3D : Triple buffer of 8 colors. 81 pixels. 29 KB
 ; Present 27 pixels (1 plan. 1KB
 ; Scrolling of letters : 87 pixels, triple buffer 40 1 plan, and scroll 87 1 plan = 14 KB
-; Logo : 32 colors. 10 KB
+; Logo : 16 colors. 10 KB
 
 ;EFFET 1 : Lettres en 3D : 81 pixels (3 plans)
 ;EFFET 2 : Presents : 27 pixels (1 plan)
 ;EFFET 3 : Scroll : 87 pixels (2 plans)
-;EFFET 4 : Logo : 64 pixels (5 plans....32 colors)
+;EFFET 4 : Logo : 64 pixels (4 plans....16 colors)
 
 
 BufferChips:

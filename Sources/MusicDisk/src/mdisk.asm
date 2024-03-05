@@ -52,7 +52,10 @@
 	
 DISPLAYDEBUGMEMORY=0 ; 1 display memory  
 ;NOINTRO=1 ; 1 = skip intro
-SHOWRASTER=0  
+SHOWRASTER=0 
+
+ALTERNATETIME = 15*50 ; Switch palette each  
+;ALTERNATETIME = 60*50 ; Switch palette each
     
 ;----------------------------------------------------------------
 ; 
@@ -164,8 +167,7 @@ BigLoop: ; ------------------------------------------------------
     add.l d0,a0
     move.l (a0),a0 
     move.l a0,Scroll1Pointer
-    ; Test palette alternative
-    bsr LaunchGradientTransition
+
     
 .nofirst:    
 
@@ -363,6 +365,19 @@ AllocateChipMemForParalax:
 	jsr		LDOS_PERSISTENT_CHIP_ALLOC(a6) ; in : d0.l: size of block
     ; d0 result
     move.l d0,paralaxChipPtr
+    ; Clear start zone. (first line)
+    move.l d0,a0
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    move.l #0,(a0)+ ; 4 bytes
+    
     ; Set double buffer for paralax
     move.l d0,a0
     add.l #planesparalax1_offset,a0
@@ -438,6 +453,11 @@ gui_count_mode_justclicked:
     
 frame_count:
     dc.w    0 ; For scroll if first launch
+    
+alternatepalette_counter: ; number of frame when palette is changed
+    dc.w    0
+    
+
 
 music_last_pattern_pos: ; use for detection of loop of music
     dc.w 0
@@ -504,7 +524,11 @@ LaunchGradientTransition_SetPalettes:
     move.l a3,a0
     move.l a5,a1
     movem.l	a2-a5,-(sp)
-    bsr ComputeStepsBackGradient ; steps for gradient of background palette.    
+    bsr ComputeStepsBackGradient ; steps for gradient of background palette.  
+
+    ; reset switch palette counter
+    move.w #0,alternatepalette_counter
+    
     movem.l	(sp)+,a2-a5
     rts
     
@@ -588,26 +612,29 @@ LoadingModule:
     bne .nospecific
     move.l Scroll1Pointer,a1 ; main text
     move.l a1,ScrollMainTextSave ; Save main text
-    move.b #1,ScrollIsSpecificText ; Set wer are playing now specific text
-.nospecific    
-    move.l a0,Scroll1Pointer     ; Set loading text
-    move.w #0,DisplayColors
-    lea TEXTLOADING,a0
-    clr.l d0
-    move.w currentmusic,d0 ; 1 to 8
-    sub.w #1,d0
-    lsl #2,d0 ; *4
-    add.l d0,a0
-    move.l (a0),a0 ; a0 contain start of specific loading text
-    ; If not specific text playing, save main text position
-    cmp.b #0,ScrollIsSpecificText
-    bne .nospecific2
-    move.l Scroll1Pointer,a1 ; main text
-    move.l a1,ScrollMainTextSave ; Save main text
-    move.b #1,ScrollIsSpecificText ; Set wer are playing now specific text
-.nospecific2:    
-    move.l a0,Scroll1Pointer 
-    move.w #0,DisplayColors
+    move.b #1,ScrollIsSpecificText ; Set we are playing now specific text
+.nospecific  
+    move.l a0,ScrollTextChangeRequest ; Will be set to Scroll1Pointer at next IRQ
+    ;move.l a0,Scroll1Pointer     ; Set loading text
+    ;move.w #0,DisplayColors
+    
+;    lea TEXTLOADING,a0
+;    clr.l d0
+;    move.w currentmusic,d0 ; 1 to 8
+;    sub.w #1,d0
+;    lsl #2,d0 ; *4
+;    add.l d0,a0
+;    move.l (a0),a0 ; a0 contain start of specific loading text
+;    ; If not specific text playing, save main text position
+;    cmp.b #0,ScrollIsSpecificText
+;    bne .nospecific2
+;    move.l Scroll1Pointer,a1 ; main text
+;    move.l a1,ScrollMainTextSave ; Save main text
+;    move.b #1,ScrollIsSpecificText ; Set wer are playing now specific text
+;.nospecific2:    
+;    move.l a0,Scroll1Pointer 
+;    move.w #0,DisplayColors
+
 .noscrollchange
 	
     ; -- If big module (2), free memory of paralax and stop music
@@ -698,8 +725,9 @@ LoadingModule:
     lea TEXTSCROLLSTABLE,a0
     add.l d0,a0
     move.l (a0),a0 
-    move.l a0,Scroll1Pointer 
-    move.w #0,DisplayColors    
+    ;move.l a0,Scroll1Pointer 
+    move.l a0,ScrollTextChangeRequest
+    ;move.w #0,DisplayColors    
 .noscrollchange2
 
     ;move.b #$44,$101 ; Debug
@@ -2178,6 +2206,15 @@ VideoIrq:
     bne .noparalaxPhase2
     bsr Paralax_3_Background ; BLITTER operation
  .noparalaxPhase2:
+ 
+ 
+    ; switch palette
+    add.w #1,alternatepalette_counter
+    cmp.w #ALTERNATETIME,alternatepalette_counter
+    bne .noswitchpal
+    bsr LaunchGradientTransition ; Switch between set 1 and 2.
+.noswitchpal:
+
 
 	rts
 ;---------------------------------------------------------------
@@ -3440,9 +3477,11 @@ TEXTLOADING:
     dc.l TEXTLOADING6
     dc.l TEXTLOADING7
     dc.l TEXTLOADING8 
+
+; Textes: 400 characters for 30 secondes. 800 for 1 minute. (approx)
 	
 TEXTMAIN:
-	dc.b "Resistance, back on the ",1,"Amiga",0," again, with a new music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod",0,".                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra,Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard",0," of ",1,"Oxygene",0,". Testing by ",1,"XXX",0,".           Greetings to: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene",0,".        If you want to read the full text for each module, you can use the LOOP icon on the control interface. "
+	dc.b "Resistance, back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod",0,".                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard",0," of ",1,"Oxygene",0,". P61 routine by Photon/Scoopex. Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox, Mop.          Greetings to these groups: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene",0,".        If you want to read the full text for each module, you can use the LOOP icon on the control interface. "
     dc.b "                                        ",$FF
   
     even
@@ -3459,7 +3498,9 @@ TEXTLOADING1:
     even
 
 TEXTMODULE1:
+    ; As these text are too long, I'll randomly switch the order (Once Maze+Vectrex28, once Vectrex28+Maze)
     dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28",0,"..... Hey, ",1,"mA2E",0," here. So a short scrolltext for my tune is coming up. Not sure what to write, but I guess I'll figure out something along the way. The tune you are listening right now if you don't have turned the volume all the way to zero, is a old tune I started on over two years ago, but never finished it before now. It's nothing fancy, and were planned for an other project which never happened. I felt it had been a wip long enough now. Anyway, I enjoyed making it. So not much more to say actually. Some quick salutations to my friends in ",1,"Desire, Fatzone, Moods Plateau and Proxima",0,".., Also a big greetings and thanks to my wife that let me sit hours after hours composing. And also as mentioned before, thanks to the whole Amiga community and their support and inspiration. Without you, I would have stopped making music many many years ago. mA2E out..... "
+    ; Scroll text end after "my part on this music disk". 1400 characters left.
     dc.b "Yoooooooo! ",1,"Vectrex28",0," here at the keyboard! First off, sorry it took so long. Having a full-time job is no joke really... But I'm glad I finally managed to finish my part on this music disk. It was first supposed to be a jungle, but it ended up being half a jungle, half a mountain backdrop. But I'm not complaining, as it turned out to be quite neat anyway. I don't really know what else to put in here, maybe just a few greetz to everyone at Resistance? I'm a bit tipsy anyway so remembering might not be my strong suit at the time I'm writing this, I've had a few sours and some sake at the local izakaya, and even with higher than average alcohol tolerance it does affect the way you write your scrollies, heh... Some extra greetz go to the folks in the PC Engine scene, which is the console I am making a game on that the moment. In no particular order: Aetherbyte, David Shadoff, Turboxray, Yoshiharu Takaoka, asie, Gorimuchuu, Chris Covell, and all I forgot. It's still a small community but some of those peeps are super talented! Also looking forward at perhaps making a PC Engine/Supergrafx intro at least for Resistance. It truly is a piece of hardware I love, and on which, despite being 8-bit, you could do a lot more than you might think, even surpassing the Megadrive on many aspects. But I'm likely getting ahead of myself, despite my love for the 'Engine, it's been an honour to be part of a prod on a machine as iconic as the Amiga (Love both my 500 and my 1200), and looking forward to be part of another music disk if I ever get the chance (and the time especially) to make it happen. Peaceeeeee"
     dc.b ".....          ",$FF
     even
@@ -3476,19 +3517,17 @@ TEXTLOADING2:
     dc.b "                                        ",$FF 
     even
     
-TEXTMODULE2:
+TEXTMODULE2: ; Should allow 1900 characters
+    
     dc.b "..... You are listening to ",1,"HI-SCHOOL GIRLS",0," by ",1,"ACEMAN",0," (2'23). Art by ",1,"RAHOW/REBELS",0,"..... Well hello there, here is ",1,"AceMan",0," at the keyboard. It is great pleasure to participate again in the second part of this noble music disc! Such fun to see what the graphic designers came up with while listening to my tunes :) So, about the tune. I made this one with the idea of jazz musician playing in the dirty night streets of the city or maybe some sleazy bar. I collected samples from all sorts of sources - I found chords and drums in some random packages, sax solos are chopped and mixed sequences from freesound.org. Everything was kept in lofi style (due to the memory limitations of the A500, but it also fits nice with the general idea). I was terribly missing some dialogue insert, so after a little research I chose Matthew McConaughey's quote from the movie 'Dazed and Confused' :) I hope you enjoy this piece. Cheers!"
+    ; 800 characters left. (Rahow text)
+    dc.b ".....   RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here."
+    
     dc.b ".....          ",$FF
     even
     
 ; --  
-TEXTMODULE3:
-    dc.b "..... You are listening to ",1,"IZAR",0," by ",1,"NAINNAIN",0," (3'35). Art by ",1,"RAHOW/REBELS",0,"..... Hello dear demoscene friends, I hope my humble contribution will entertain you. I would like to greet all the members of our group, Resistance, as well as all the artists and developers who maintain alive our wonderful platforms from our childhood...."
-    dc.b " ",1,"RAHOW",0," speaking.... Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here, Rahow text here ......"
-    dc.b ".....          ",$FF
-    
-    even
-    
+
 TEXTLOADING3: 
     dc.b " ... Loading ... "
     dc.b "Please wait while ",1,"IZAR",0," (62 KB) is loading... "
@@ -3498,14 +3537,18 @@ TEXTLOADING3:
     dc.b "Please wait while ",1,"IZAR",0," (62 KB) is loading... "
     dc.b "                                        ",$FF 
     even
+
+TEXTMODULE3: ; Should allow 2800 chracters
+    dc.b "..... You are listening to ",1,"IZAR",0," by ",1,"NAINNAIN",0," (3'35). Art by ",1,"RAHOW/REBELS",0,"..... Hello dear demoscene friends, I hope my humble contribution will entertain you. I would like to greet all the members of our group, Resistance, as well as all the artists and developers who maintain alive our wonderful platforms from our childhood...."
+    ; 2400 left for RAHOW text.
+    dc.b ".....   RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here."
     
-; --  
-TEXTMODULE4:
-    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p"
     dc.b ".....          ",$FF
     
     even
     
+; -- 
+
 TEXTLOADING4: 
     dc.b " ... Loading ... "
     dc.b "Please wait while ",1,"STAR-STUDDED SKIES",0," (30 KB) is loading... "
@@ -3515,14 +3558,16 @@ TEXTLOADING4:
     dc.b "Please wait while ",1,"STAR-STUDDED SKIES",0," (30 KB) is loading... "
     dc.b "                                        ",$FF 
     even
-
-; --  
-TEXTMODULE5:
-    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ST-XX disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!"
+ 
+TEXTMODULE4: ; Should allow 1600 characters
+    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p"
+    ; 900 characters left.
     dc.b ".....          ",$FF
-
-    even    
     
+    even
+
+; -- 
+
 TEXTLOADING5:
     dc.b " ... Loading ... "
     dc.b "Please wait while ",1,"LE VOYAGE FANTASTIQUE",0," (234 KB) is loading... "
@@ -3532,15 +3577,18 @@ TEXTLOADING5:
     dc.b "Please wait while ",1,"LE VOYAGE FANTASTIQUE",0," (234 KB) is loading... "
     dc.b "                                        ",$FF 
     even
-
-; --  
-TEXTMODULE6:
-    dc.b "..... You are listening to ",1,"BALLADE",0," by ",1,"KOOPA",0," (2'42). Art by ",1,"FRA & ORIENS",0,"..... "
-    dc.b 1,"KOOPA",0," on Keybaord. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
-    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personnal greeting : ",1,"Locust2802",0,",",1,"Rodrik",0,", (to be continued) ...."
-    dc.b ".....          ",$FF
+ 
+TEXTMODULE5: ; 4000 characters available.
+    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ST-XX disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!"
+    ; 3500 characters left.
+    ; RJ Mical text here ??
     
-    even
+    dc.b ".....          ",$FF
+
+    even    
+
+; -- 
+
     
 TEXTLOADING6:
     dc.b " ... Loading ... "
@@ -3551,16 +3599,18 @@ TEXTLOADING6:
     dc.b "Please wait while ",1,"BALLADE",0," (67 KB) is loading... "
     dc.b "                                        ",$FF 
     even
-
-; --  
-TEXTMODULE7:
-    dc.b "..... You are listening to ",1,"THROUGH THE GATE",0," by ",1,"OK3AN0S/TEK",0," (2'33). Art by ",1,"SnC",0,"..... ",1,"OK3AN0S",0," on the keyboard. I set myself a reminder for all the time that I err. So that I may always remember that I am but a prisoner. This module is one of the rare ones I have composed with a sad melody. I usually make happy and cheesy melodies when composing chiptunes. For this one, I wanted to make something which sounded like the old cracktros or some kind of RPG like games I played on 8bit consoles. I'm pretty satisfied with the result as it sounds exactly how I wanted it to be.   "
-    
-    dc.b "",1,"SnC",0," on keyboard. Heyo friends - and welcome to another fine musicdisk by your favourite misfits! We hope you enjoy the nice tunes by our super talented house musicians - on the beloved ",1,"AMIGA",0,"! :: I just want to thank the rest of the team for all the amazing work put into this disk, a round of applause to all of you for making it possible, and for keeping the Amiga alive! Enjoy the show - Enjoy Amiga"    
+ 
+TEXTMODULE6: ; 2000 characters
+    dc.b "..... You are listening to ",1,"BALLADE",0," by ",1,"KOOPA",0," (2'42). Art by ",1,"FRA & ORIENS",0,"..... "
+    dc.b 1,"KOOPA",0," on Keybaord. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
+    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personnal greetings: ",1," Locust2802, Rodrik, Bird/Syntex, Deckard, Wookie, friends of Deadliners Soundy, Made, Dascon, Dan and Facet from Lemon., Leonard and Mon from Oxygene, Ziggy Stardust,  ... ",0," (to be continued) ...."
+    ; 1300 characters left.
     dc.b ".....          ",$FF
     
     even
-    
+
+; --
+
 TEXTLOADING7: 
     dc.b " ... Loading ... "
     dc.b "Please wait while ",1,"THROUGH THE GATE",0," (34 KB) is loading... "
@@ -3570,13 +3620,17 @@ TEXTLOADING7:
     dc.b "Please wait while ",1,"THROUGH THE GATE",0," (34 KB) is loading... "
     dc.b "                                        ",$FF 
     even
-
-; --  
-TEXTMODULE8:
-    dc.b "..... You are listening to ",1,"FLY'N FALL",0," by ",1,"TEBIROD",0," (4'33). Art by ",1,"ORIENS",0,"..... Hi all, ",1,"ORIENS",0," on the keyboard. It has been a pleasure to code and do some graphs for this musik disk. So many talentued people. Thanks again to ",1,"LEONARD",0," for sharing his LDOS system. This musik disk is dedicated to my friend ",1,"TEBIROD",0," who passed away in june 2023. I've been working with him for 30 years, he was a really cool guy. The tune used in intro is also from him and have a particular story. This module was initially done for the intro of our ",1,"HAWK",0," mega demo ",1,"EARTH SORROWS",0," in 1991. This was the first version for the intro. After checking all the art effects, I asked ",1,"TEBIROD",0," if he could improve the module and he wrote a (perfect) second version for the mega demo. This first module have been left since today. Glad to at last having using it. ",1,"FLY'N FALL",0," module is also an unused module from ",1,"TEBIROD",0,". I really love this song, perfect for ending this musik disk. ",1,"ORIENS",0," singing off"
+  
+TEXTMODULE7: ; 2000 characters
+    dc.b "..... You are listening to ",1,"THROUGH THE GATE",0," by ",1,"OK3AN0S/TEK",0," (2'33). Art by ",1,"SnC",0,"..... ",1,"OK3AN0S",0," on the keyboard. I set myself a reminder for all the time that I err. So that I may always remember that I am but a prisoner. This module is one of the rare ones I have composed with a sad melody. I usually make happy and cheesy melodies when composing chiptunes. For this one, I wanted to make something which sounded like the old cracktros or some kind of RPG like games I played on 8bit consoles. I'm pretty satisfied with the result as it sounds exactly how I wanted it to be.   "
+    
+    dc.b "",1,"SnC",0," on keyboard. Heyo friends - and welcome to another fine musicdisk by your favourite misfits! We hope you enjoy the nice tunes by our super talented house musicians - on the beloved ",1,"AMIGA",0,"! :: I just want to thank the rest of the team for all the amazing work put into this disk, a round of applause to all of you for making it possible, and for keeping the Amiga alive! Enjoy the show - Enjoy Amiga" 
+    ; 900 characters left    
     dc.b ".....          ",$FF
     
     even
+
+; --  
 
 TEXTLOADING8: 
     dc.b " ... Loading ... "
@@ -3588,6 +3642,15 @@ TEXTLOADING8:
     dc.b "                                        ",$FF 
     even
 
+
+TEXTMODULE8: ; 3600 characters available
+    dc.b "..... You are listening to FLY'N FALL by TEBIROD (4'33). Art by ORIENS..... Hi all, this is ORIENS at the keyboard. It has been a pleasure to code and create some graphics for this music disk. There are so many talented people involved. Thanks once again to LEONARD for sharing his LDOS system. This music disk is dedicated to my friend TEBIROD who passed away in June 2023. I had the privilege of working with him for 30 years, he was a truly remarkable person. The tune used in the intro is also his, and it has a special story. This module was initially created for the intro of our HAWK mega demo EARTH SORROWS in 1991. It was the first version for the intro. After reviewing all the artistic effects, I asked TEBIROD if he could improve the module, and he crafted a (perfect) second version for the mega demo. This first module had been left unused until today. I'm glad to finally be able to use it. The FLY'N FALL module is also an unused piece from TEBIROD. I truly adore this song, it's a perfect choice to conclude this music disk. ORIENS signing off."
+    ; 2500 characters left.
+    dc.b ".....          ",$FF
+    
+    even
+
+
 ; ------------------------------------------------------
 
 Scroll1NextLetter:
@@ -3595,7 +3658,9 @@ Scroll1NextLetter:
 Scroll1Pointer:
 	dc.l	TEXTMAIN
 ScrollMainTextSave:
-    dc.l    0 ; When switching to specific text, save main text pointer    
+    dc.l    0 ; When switching to specific text, save main text pointer
+ScrollTextChangeRequest:
+    dc.l    0 ; Ask for text change, will be managed in IRQ, at one place.
 Scroll1Letter:
 	dc.b	' ',$FF
 ScrollIsSpecificText:
@@ -3639,15 +3704,26 @@ SCROLLTEXTSPEED = 2
 	sub.w #SCROLLTEXTSPEED,Scroll1NextLetter ; Same as Speed in decay above
 	cmp.w #0,Scroll1NextLetter
 	bgt .nonew
-	; -- Display letter to end of scroll1 plan
-	;Lea Font1,a0
-	;Bsr Initfont ; Init Font pointer	
-	;move.l #planescrolling1+2,fontplanebaseScroll	
-	
-	;Lea Scroll1Letter,a0
+    
+.GetNextLetter: ; -- Get next letter ------------------------
+	move.l Scroll1Pointer,a0
+	move.b (a0),Scroll1Letter
+	add.l #1,Scroll1Pointer
+    ; -- Test color flags
+    cmp.b #0,(a0)
+    bne .noflagcolornormal
+    move.w #0,DisplayColors ; Set font white, the normal one 8 first colors
+    bra .GetNextLetter
+.noflagcolornormal:     
+    cmp.b #1,(a0)
+    bne .noflagcoloralternate
+    move.w #1,DisplayColors ; Ask for alternate font, 8 next colors
+    bra .GetNextLetter
+.noflagcoloralternate: 
+
+    
+	; -- Display letter to end of scroll1 plan ----------------------------------
 	move.l #320,d0 ; X (width). round value (for CPU Display)
-    ;move.w #160,d0 ; Debug
-	;add.w Scroll1NextLetter,d0 ; Scroll have moved faster than letter display
 SCROLLBASEHEIGHT=13 ; g and y are a bit cut   
 	move.l #SCROLLBASEHEIGHT,d1 ; Y (height, bottom of character, base line)
     moveq #0,d2	
@@ -3665,24 +3741,8 @@ SCROLLBASEHEIGHT=13 ; g and y are a bit cut
     add.w #3,d0 ; add more value to space character
 .nospace  
 	add.w d0,Scroll1NextLetter ; Number of pixels to wait before displaying next letter
-.GetNextLetter:
-	; Get next letter
-	move.l Scroll1Pointer,a0
-	move.b (a0),Scroll1Letter
-	add.l #1,Scroll1Pointer
-	
-    ; Test color flags
-    cmp.b #0,(a0)
-    bne .noflagcolornormal
-    move.w #0,DisplayColors ; Set font white, the normal one 8 first colors
-    bra .GetNextLetter
-.noflagcolornormal:     
-    cmp.b #1,(a0)
-    bne .noflagcoloralternate
-    move.w #1,DisplayColors ; Ask for alternate font, 8 next colors
-    bra .GetNextLetter
-.noflagcoloralternate:    
-    
+
+    ; End of scrolling ?
 	move.l Scroll1Pointer,a0
 	add.l #1,a0
 	cmp.b #$FF,(a0)
@@ -3694,17 +3754,35 @@ SCROLLBASEHEIGHT=13 ; g and y are a bit cut
     beq .specifictext
     ; Main text is looping
     move.l #TEXTMAIN,Scroll1Pointer
-    
     bra .noendscroll
-.specifictext ; Specific text was playing, so go back to main text
+.specifictext ; -- Specific text was playing, so go back to main text
     move.b #0,ScrollIsSpecificText
     move.l ScrollMainTextSave,a0
+    ; We search for last dot, to have a complete sentence. (or Start of scrolltext)
+.finddotorStart:
+    cmp.b #'.',-1(a0)
+    beq .found
+    cmp.l #TEXTMAIN,a0
+    beq .found
+    subq #1,a0 ; back one character
+    bra .finddotorStart
+.found
     move.l a0,Scroll1Pointer
     move.w #0,DisplayColors
     
 .noendscroll
 .endscroll1:	
 .nonew:
+    
+    ; Scroll change was requested.
+    cmp.l #0,ScrollTextChangeRequest
+    beq .notextchange
+    move.l ScrollTextChangeRequest,a0
+    move.l #0,ScrollTextChangeRequest ; clear request
+    move.l a0,Scroll1Pointer     ; Set current text
+    move.w #0,DisplayColors ; reset color
+.notextchange:
+
 	rts
 
 ;----------------------------------------------------------------
@@ -3934,20 +4012,28 @@ UpdateStepsCopper:
     move.w (a0)+,(a1)
     add.l #16,a1
     dbra d0,.loopcopycolorsb2
+    ; Part 3 (3 lines)
+;    lea CopperGradient3,a1 ; dest
+;    add.l #6,a1
+;    move.w #3-1,d0 ; 3 lines
+;.loopcopycolorsb3
+;    move.w (a0)+,(a1)
+;    add.l #16,a1
+;    dbra d0,.loopcopycolorsb3
     
     ; -- Bottom gradient is 4 colors.
     ; Report same as last colors of main gradient
-    lea CopperGradient2_LastLines+6,a0
+    lea gradient_result_copper+60*2,a0
     lea Bottom1+6,a1
     move.w (a0),(a1)
-    lea CopperGradient2_LastLines+6+16,a0
+    lea gradient_result_copper+61*2,a0
     lea Bottom2+6,a1
     move.w (a0),(a1) 
     lea Bottom34+6,a1
-    lea CopperGradient2_LastLines+6+16*2,a0
+    lea gradient_result_copper+62*2,a0
     move.w (a0),(a1) 
     add.l #16,a1
-    lea CopperGradient2_LastLines+6+16*3,a0
+    lea gradient_result_copper+63*2,a0
     move.w (a0),(a1) 
     
     ; If loading big module then fill all the gap
@@ -4129,7 +4215,6 @@ CopperGradient2:
         dc.b $2c+120,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+120,$d5,$ff,$fe,  $01,$80,$00,$00
 		dc.b $2c+121,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+121,$d5,$ff,$fe,  $01,$80,$00,$00
         dc.b $2c+122,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+122,$d5,$ff,$fe,  $01,$80,$00,$00
-CopperGradient2_LastLines:        
 		dc.b $2c+123,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+123,$d5,$ff,$fe,  $01,$80,$00,$00
         dc.b $2c+124,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+124,$d5,$ff,$fe,  $01,$80,$00,$00
 		dc.b $2c+125,$45,$ff,$fe,  $01,$80,$00,$00 , $2c+125,$d5,$ff,$fe,  $01,$80,$00,$00
@@ -4148,7 +4233,7 @@ BackgroundPlanControl3:
         dc.l    $01004200 ; scroll $00XX, X 0 to F.   4 planes. 
 ;CopperGradient3: 
 ;		dc.b $2c+127,$47,$ff,$fe,   $01,$80,$00,$00 , $2c+127,$d5,$ff,$fe,   $01,$80,$00,$00
-;       dc.b $2c+128,$47,$ff,$fe,   $01,$80,$00,$00 , $2c+128,$d5,$ff,$fe,   $01,$80,$00,$00
+;        dc.b $2c+128,$47,$ff,$fe,   $01,$80,$00,$00 , $2c+128,$d5,$ff,$fe,   $01,$80,$00,$00
 ;		dc.b $2c+129,$47,$ff,$fe,   $01,$80,$00,$00 , $2c+129,$d5,$ff,$fe,   $01,$80,$00,$00
         
         ; -- Scrolling of Text (16 pixels)
