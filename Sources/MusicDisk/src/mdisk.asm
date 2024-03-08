@@ -54,8 +54,8 @@ DISPLAYDEBUGMEMORY=0 ; 1 display memory
 ;NOINTRO=1 ; 1 = skip intro
 SHOWRASTER=0 
 
-ALTERNATETIME = 15*50 ; Switch palette each  
-;ALTERNATETIME = 60*50 ; Switch palette each
+;ALTERNATETIME = 15*50 ; Switch palette each  
+ALTERNATETIME = 60*50 ; Switch palette each
     
 ;----------------------------------------------------------------
 ; 
@@ -68,6 +68,8 @@ startup:
     move.l	#$28613091,$8e(a6)	; Screen definition and size
 	move.l	#$003800d0,$92(a6)	; 40 de large
 	move.w	#%1000001111111111,$96(a6) ; Turn on DMA Bit 15=Set. 10=NastyBlitter 9=AllDma 8-4=DMAs 3-0=Audio
+    
+    bsr InitRandom
 	
     move.b #1,first_launch ; first music counter
    
@@ -159,6 +161,7 @@ BigLoop: ; ------------------------------------------------------
     move.w #0,DisplayColors
     move.l a1,ScrollMainTextSave ; Save main text
     move.b #1,ScrollIsSpecificText ; Set we are playing now specific text
+    bsr switchtext1 ; random choose text1
     clr.l d0
     move.w currentmusic,d0 ; 1 to 8
     sub.w #1,d0
@@ -226,7 +229,7 @@ NBMODULES=8
 NextClicked:
     bsr InitCursorMouseWait
     
-    move.l #2,a6
+    ;move.l #2,a6
     
     move.b #0,first_launch ; first music counter
     
@@ -243,7 +246,13 @@ NextClicked:
     move.w #1,currentmusic ; reset to first module
 .nomoduleoverflow:  
 
-    move.l #3,a6
+    ;move.l #3,a6
+    
+    cmp.w #1,currentmusic
+    bne .no1
+    bsr switchtext1 ; random choose text1
+.no1:
+    
 
     move.b #GUITILEPRESSEDON,gui_count_next_justclicked
     ; Display "on" icon
@@ -257,7 +266,7 @@ NextClicked:
     move.l #0,d0 ; style 0=off 1=on 2=rollover
     bsr DisplayGuiIcon 
 
-    move.l #4,a6    
+    ;move.l #4,a6    
 
     move.w #1,request_loading
     move.b #1,flag_module_is_loading
@@ -284,7 +293,12 @@ PrevClicked:
     move.w #NBMODULES+1,currentmusic ; reset to last module
 .nomoduleoverflow:   
     sub.w #1,currentmusic ; prev module 
-    
+
+    cmp.w #1,currentmusic
+    bne .no1
+    bsr switchtext1 ; random choose text1
+.no1:
+
     move.b #GUITILEPRESSEDON,gui_count_prev_justclicked
     ; Display "on" icon
     lea gui_prev,a0
@@ -356,6 +370,46 @@ PlayClicked:
     ; wait a bit (click to be undone)
     bsr waitabit
 	bra BigLoop 
+    
+; -------------------------------------------------------------------------------
+switchtext1:
+    ; random choose for text1, order vary.
+    lea TEXTSCROLLSTABLE,a0
+    bsr GetRandom ; d0.w
+    move.w d0,$100
+    
+    move.l #TEXTMODULE1,(a0)
+    
+    cmp.b #$80,d0
+    bpl .nochange
+    move.l #TEXTMODULE1ALT,(a0)
+.nochange: 
+    
+    rts
+
+;-----------------------------------------------------------------------
+; Return random number in d0.w
+GetRandom:	
+    Movem.l	d1-d2,-(a7)
+	Move.w	SBPA,d0
+	Move.w	d0,d1
+	Move.w	d0,d2
+	And.w	#%0000000001000000,d0	
+	And.w	#%0000000000000001,d2	
+	Lsr	#6,d0
+	eor.w	d0,d2
+	Lsl.w	#1,d1
+	Or.w	d2,d1
+	Move.w	d1,SBPA
+    move.w  d1,d0
+	Movem.l	(a7)+,d1-d2
+	Rts
+SBPA: ; Sequence Binaire Pseudo Aleatoire	
+    Dc.w	$7fa5
+;-----------------------------------------------------------------------
+InitRandom:				; call once at init
+	Move.b	$dff006,SBPA+1
+	Rts
 
 ; -------------------------------------------------------------------------------
 ; Allocate chip persistant (end of chip mem block)
@@ -365,8 +419,10 @@ AllocateChipMemForParalax:
 	jsr		LDOS_PERSISTENT_CHIP_ALLOC(a6) ; in : d0.l: size of block
     ; d0 result
     move.l d0,paralaxChipPtr
-    ; Clear start zone. (first line)
+    ; Clear start zone. 
     move.l d0,a0
+    move.w #10-1,d1
+.clearoneline:
     move.l #0,(a0)+ ; 4 bytes
     move.l #0,(a0)+ ; 4 bytes
     move.l #0,(a0)+ ; 4 bytes
@@ -377,6 +433,7 @@ AllocateChipMemForParalax:
     move.l #0,(a0)+ ; 4 bytes
     move.l #0,(a0)+ ; 4 bytes
     move.l #0,(a0)+ ; 4 bytes
+    dbra d1,.clearoneline
     
     ; Set double buffer for paralax
     move.l d0,a0
@@ -3481,7 +3538,14 @@ TEXTLOADING:
 ; Textes: 400 characters for 30 secondes. 800 for 1 minute. (approx)
 	
 TEXTMAIN:
-	dc.b "Resistance, back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod",0,".                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard",0," of ",1,"Oxygene",0,". P61 routine by Photon/Scoopex. Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox, Mop.          Greetings to these groups: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene",0,".        If you want to read the full text for each module, you can use the LOOP icon on the control interface. "
+	dc.b "Resistance, back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod",0,".                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard",0," of ",1,"Oxygene",0,". P61 routine by Photon/Scoopex. Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox, Mop.          Greetings to these groups: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene",0,".                 "
+    dc.b "If you want to read the full text for each module, you can use the LOOP icon on the control interface.        "
+    dc.b "Here are some technical details about that music disk. It is running on an Amiga 500 OCS with 1 MB of RAM. It also runs on all Amiga models and can be launched from a hard drive (execute hdd_loader.exe alongside the ADF file). The total uncompressed data size of the modules is 1120 KB. If you only have 512 KB of chip RAM, I will need to stop the music and free the scrolling memory to load the second module, HI-SCHOOL GIRLS, which is 375 KB! Each module has its 32-color background. The total data on the disk is 1600 KB once uncompressed. The music disk runs with a customized version of the LDOS track system by LEONARD. Thanks again to him for sharing.      "
+    
+    dc.b "If you enjoy this music disk, you should consider listening to the first opus, Mel'O'Dees, released in 2021. On PC, you can listen to Marine Melodies (2022). Also, try SNES Music Pack 1 (2021). In any case, make sure to turn on your best hi-fi system to fully appreciate these great tunes. "
+
+    dc.b "We are currently preparing the next music disks. If you want to contribute, feel free to contact us. Musicians and artists are welcomed.          "
+    
     dc.b "                                        ",$FF
   
     even
@@ -3499,11 +3563,22 @@ TEXTLOADING1:
 
 TEXTMODULE1:
     ; As these text are too long, I'll randomly switch the order (Once Maze+Vectrex28, once Vectrex28+Maze)
-    dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28",0,"..... Hey, ",1,"mA2E",0," here. So a short scrolltext for my tune is coming up. Not sure what to write, but I guess I'll figure out something along the way. The tune you are listening right now if you don't have turned the volume all the way to zero, is a old tune I started on over two years ago, but never finished it before now. It's nothing fancy, and were planned for an other project which never happened. I felt it had been a wip long enough now. Anyway, I enjoyed making it. So not much more to say actually. Some quick salutations to my friends in ",1,"Desire, Fatzone, Moods Plateau and Proxima",0,".., Also a big greetings and thanks to my wife that let me sit hours after hours composing. And also as mentioned before, thanks to the whole Amiga community and their support and inspiration. Without you, I would have stopped making music many many years ago. mA2E out..... "
+    dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28. ",0
+    dc.b "..... Hey, ",1,"mA2E",0," here. So a short scrolltext for my tune is coming up. Not sure what to write, but I guess I'll figure out something along the way. The tune you are listening right now if you don't have turned the volume all the way to zero, is a old tune I started on over two years ago, but never finished it before now. It's nothing fancy, and were planned for an other project which never happened. I felt it had been a wip long enough now. Anyway, I enjoyed making it. So not much more to say actually. Some quick salutations to my friends in ",1,"Desire, Fatzone, Moods Plateau and Proxima..",0," Also a big greetings and thanks to my wife that let me sit hours after hours composing. And also as mentioned before, thanks to the whole Amiga community and their support and inspiration. Without you, I would have stopped making music many many years ago. ",1,"mA2E",0," out..... "
     ; Scroll text end after "my part on this music disk". 1400 characters left.
-    dc.b "Yoooooooo! ",1,"Vectrex28",0," here at the keyboard! First off, sorry it took so long. Having a full-time job is no joke really... But I'm glad I finally managed to finish my part on this music disk. It was first supposed to be a jungle, but it ended up being half a jungle, half a mountain backdrop. But I'm not complaining, as it turned out to be quite neat anyway. I don't really know what else to put in here, maybe just a few greetz to everyone at Resistance? I'm a bit tipsy anyway so remembering might not be my strong suit at the time I'm writing this, I've had a few sours and some sake at the local izakaya, and even with higher than average alcohol tolerance it does affect the way you write your scrollies, heh... Some extra greetz go to the folks in the PC Engine scene, which is the console I am making a game on that the moment. In no particular order: Aetherbyte, David Shadoff, Turboxray, Yoshiharu Takaoka, asie, Gorimuchuu, Chris Covell, and all I forgot. It's still a small community but some of those peeps are super talented! Also looking forward at perhaps making a PC Engine/Supergrafx intro at least for Resistance. It truly is a piece of hardware I love, and on which, despite being 8-bit, you could do a lot more than you might think, even surpassing the Megadrive on many aspects. But I'm likely getting ahead of myself, despite my love for the 'Engine, it's been an honour to be part of a prod on a machine as iconic as the Amiga (Love both my 500 and my 1200), and looking forward to be part of another music disk if I ever get the chance (and the time especially) to make it happen. Peaceeeeee"
+    dc.b "Yoooooooo! ",1,"Vectrex28",0," here at the keyboard! First off, sorry it took so long. Having a full-time job is no joke really... But I'm glad I finally managed to finish my part on this music disk. It was first supposed to be a jungle, but it ended up being half a jungle, half a mountain backdrop. But I'm not complaining, as it turned out to be quite neat anyway. I don't really know what else to put in here, maybe just a few greetz to everyone at ",1,"Resistance?",0," I'm a bit tipsy anyway so remembering might not be my strong suit at the time I'm writing this, I've had a few sours and some sake at the local izakaya, and even with higher than average alcohol tolerance it does affect the way you write your scrollies, heh... Some extra greetz go to the folks in the PC Engine scene, which is the console I am making a game on that the moment. In no particular order: ",1,"Aetherbyte, David Shadoff, Turboxray, Yoshiharu Takaoka, asie, Gorimuchuu, Chris Covell, and all I forgot.",0," It's still a small community but some of those peeps are super talented! Also looking forward at perhaps making a PC Engine/Supergrafx intro at least for Resistance. It truly is a piece of hardware I love, and on which, despite being 8-bit, you could do a lot more than you might think, even surpassing the Megadrive on many aspects. But I'm likely getting ahead of myself, despite my love for the 'Engine, it's been an honour to be part of a prod on a machine as iconic as the Amiga (Love both my 500 and my 1200), and looking forward to be part of another music disk if I ever get the chance (and the time especially) to make it happen. Peaceeeeee"
     dc.b ".....          ",$FF
     even
+    
+TEXTMODULE1ALT:
+    ; As these text are too long, I'll randomly switch the order (Once Maze+Vectrex28, once Vectrex28+Maze)
+    dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28. ",0
+    dc.b "Yoooooooo! ",1,"Vectrex28",0," here at the keyboard! First off, sorry it took so long. Having a full-time job is no joke really... But I'm glad I finally managed to finish my part on this music disk. It was first supposed to be a jungle, but it ended up being half a jungle, half a mountain backdrop. But I'm not complaining, as it turned out to be quite neat anyway. I don't really know what else to put in here, maybe just a few greetz to everyone at ",1,"Resistance?",0," I'm a bit tipsy anyway so remembering might not be my strong suit at the time I'm writing this, I've had a few sours and some sake at the local izakaya, and even with higher than average alcohol tolerance it does affect the way you write your scrollies, heh... Some extra greetz go to the folks in the PC Engine scene, which is the console I am making a game on that the moment. In no particular order: ",1,"Aetherbyte, David Shadoff, Turboxray, Yoshiharu Takaoka, asie, Gorimuchuu, Chris Covell, and all I forgot.",0," It's still a small community but some of those peeps are super talented! Also looking forward at perhaps making a PC Engine/Supergrafx intro at least for Resistance. It truly is a piece of hardware I love, and on which, despite being 8-bit, you could do a lot more than you might think, even surpassing the Megadrive on many aspects. But I'm likely getting ahead of myself, despite my love for the 'Engine, it's been an honour to be part of a prod on a machine as iconic as the Amiga (Love both my 500 and my 1200), and looking forward to be part of another music disk if I ever get the chance (and the time especially) to make it happen. Peaceeeeee"
+    dc.b "..... Hey, ",1,"mA2E",0," here. So a short scrolltext for my tune is coming up. Not sure what to write, but I guess I'll figure out something along the way. The tune you are listening right now if you don't have turned the volume all the way to zero, is a old tune I started on over two years ago, but never finished it before now. It's nothing fancy, and were planned for an other project which never happened. I felt it had been a wip long enough now. Anyway, I enjoyed making it. So not much more to say actually. Some quick salutations to my friends in ",1,"Desire, Fatzone, Moods Plateau and Proxima..",0," Also a big greetings and thanks to my wife that let me sit hours after hours composing. And also as mentioned before, thanks to the whole Amiga community and their support and inspiration. Without you, I would have stopped making music many many years ago. ",1,"mA2E",0," out..... "
+
+    dc.b ".....          ",$FF
+    even
+    
 
 ; --  
 
@@ -3560,8 +3635,11 @@ TEXTLOADING4:
     even
  
 TEXTMODULE4: ; Should allow 1600 characters
-    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p"
+    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p      "
     ; 900 characters left.
+    dc.b " ORIENS back at the keyboard. My next contribution to the Amiga scene will be a game named Ninja Carnage. I've developed it for 8-bit computers such as the Commodore 64 and Amstrad CPC. It has also been ported to the Spectrum by Clive Townsend. Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon.                "
+    ; 500 characters left.
+    
     dc.b ".....          ",$FF
     
     even

@@ -57,17 +57,17 @@
     ;bra DEBUGFX4
     
     ; -- DEBUG, go to next effect
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_MUSIC_STOP(a6)
-    move.w #100,d0
-    bsr WaitFrames ; Wait 2 second (music fade out)    
-    ; TODO Unalloc Music space
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_FREE_MEM_MUSIC(a6)    
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_PRELOAD_NEXT_FX(a6)
-    ; we now can terminate this part by RTS. Next part will execute a start music command
-    rts         ; end of this part
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_MUSIC_STOP(a6)
+;    move.w #100,d0
+;    bsr WaitFrames ; Wait 2 second (music fade out)    
+;    ; TODO Unalloc Music space
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_FREE_MEM_MUSIC(a6)    
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_PRELOAD_NEXT_FX(a6)
+;    ; we now can terminate this part by RTS. Next part will execute a start music command
+;    rts         ; end of this part
     ; -- end Debug
 
     ; -- FX1 ---------------------------------------------------
@@ -355,7 +355,7 @@ BackgroundAnimation:
     move.w BackGroundCounterScrollPalette,d0 ; 28 to 0
     lsr.w #2,d0 ; 7 to 0
     move.l #7,d1
-    move.w d1,$106
+    ;move.w d1,$106
     sub.w d0,d1 ; 0 to 7
     
     cmp.w #0,d1
@@ -369,7 +369,7 @@ BackgroundAnimation:
     dbra d1,.loop
     bsr BackgroundAnimation_CopyOriginal
     
-    move.w BackGroundCounterScrollPalette,$104
+    ;move.w BackGroundCounterScrollPalette,$104
 
 .noscrollpalette:   
     ; 1 -- Check Back to Front animation
@@ -806,7 +806,6 @@ Fx1_CopyBuffers:
     rts
 
 Fx1_Loop:
-    ;add.b #1,$101
 
 bitplanelines=87 ; 128 pixel high    
 bitplanesizebytes=40*bitplanelines ; Size of one bitplane. We got 3 like this
@@ -844,6 +843,7 @@ bitplaneusedwidthinbytes=16 ; 128 pixels wide
 	move.l P_Vertices,a0
 	lea pointsprojeted,a1
 	sub.w #1,d4
+    
 DoProjection:
 	clr.l d7
 	clr.l d6
@@ -877,7 +877,7 @@ DoProjection:
 	move.w d7,(a1)+
 	move.w d6,(a1)+
 	dbra d4,DoProjection
-	
+    
 	;move.w countertest,d0
 	;bsr DisplayWord
 
@@ -966,16 +966,19 @@ DoProjection:
 	add.l d0,a4 ; We got the correct color, now get the brighness. 32 word. at middle, normal color
 	add.l d1,a4 ; Add brightness
 	move.l (a4),colorblend ; Color to use.
+    
 	move.l a2,-(sp)
 	; Draw face
-	bsr drawshape
+	bsr drawshape ; FAIL INSIDE THIS, last frame, maybe going out of screen ?
 	move.l (sp)+,a2
+    
 .nextface
 	add.l #6,a2 ; Next face
 	;sub.w #1,FaceLimiter
 	;beq .endfacesquads
 	cmp.l #$FFFFFFFF,(a2)
 	bne .looponfaces
+    
 .endfacesquads:	
 	;sub.w #1,BigDebugLoopCounter ; debug
 	;bne BigDebugLoop
@@ -1322,19 +1325,19 @@ DotDepthStart:
 DotDepthEnd:
 		dc.w 2000 ; 500 + 16*31
 DotAnimdirection: ; 0 = raising, 1=decreasing , 2 = do nothing
-		dc.w 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+		dc.w 1
 DotCurrent: 
-		dc.w 2000,470,490,510,530,550,570,590 ; TODO For all Three leters 530 for all should be fine.
-		dc.w 610,630,650,670,690,710,730,750
+		dc.w 2000
 ;----------------------------------------------------------------	
 DotAnimation:
-    ;add.b #1,$104
+    ;add.b #1,$100
 	;lea points,a0
 	;add.l #4,a0 ; point to Z
 	lea DotCurrent,a1
 	lea DotAnimdirection,a2
-	move.w #1-1,d5
+	;move.w #1-1,d5
 .DotAnimationLoop
+    moveq #0,d0
 	move.w (a1),d0 ; Current depth
 	;move.w countertest,d0
 	;bsr DisplayWord
@@ -1344,15 +1347,15 @@ DotAnimation:
 	beq .decreasing
 	; Raising
 SPEED3D=17    
-	add.w #SPEED3D,d0 ; TODO: Debug no move
+	add.w #SPEED3D,d0
 	cmp.w DotDepthEnd,d0
-	blt .copyvaluestotable
+	blt.w .copyvaluestotable
 	move.w #1,(a2) ; Change animation way
 	bra .copyvaluestotable
 .decreasing:	
 	sub.w #SPEED3D,d0 ; TODO: Debug no move
-	cmp.w DotDepthStart,d0
-	bgt .copyvaluestotable
+	cmp.w DotDepthStart,d0 ; 530
+	bgt.w .copyvaluestotable
 	;move.w #0,(a2) ; Change animation way
     move.w #2,(a2) ; Stop
     ; Reset animation, to next letter
@@ -1374,7 +1377,6 @@ SPEED3D=17
     cmp.l #Obj3d_E,P_Obj3d
     bne .wasnotE
     move.w #3,AskForCopyLetter ; Letter S will be copied to all buffers
-    ;move.w #2,$100
     ; Copy resistance small logo
     lea screen1,a3
     bsr Fx1_CopySmallLogo
@@ -1390,9 +1392,9 @@ SPEED3D=17
 	move.w d0,(a1)+ ; Store current point and go to next point
 	;move.w d0,(a0)
 	;add.l #6,a0 ; go to next point
-	add.l #2,a2 ; next direction
-	dbra d5,.DotAnimationLoop	
-.end:    
+	;add.l #2,a2 ; next direction
+	;dbra d5,.DotAnimationLoop	
+.end: 
 	rts
 
 	; d0 depth
@@ -1491,19 +1493,26 @@ Plot:					;d1=x, d2=y, d3=color, a1=screen
 ;---------------------------------------------------------------
 ; a0 Shape structure	
 drawshape: ; Quad
+
 	move.l	a0,-(sp) ; Store on stack
 	bsr computeminmax ; compute the limits, empty the zone
 	; Draw a quad from a memory structure (quadtest)
-	move.l	(sp),a0 ; Structure
+	move.l	(sp),a0 ; restore Structure
 	cmp.w #0,26(a0)
 	beq .nodraw
+    
 	bsr drawquad
-	move.l	(sp),a0
+    
+	move.l	(sp),a0 ; restore Structure
+    
 	bsr fillbob
-.nofill
+
 	move.l	(sp)+,a0 ; last time, we pop the value from stack
-	bsr copybob	
+    
+	bsr copybob ; FAIL INSIDE
+	
 	rts
+    
 .nodraw
 	move.l	(sp)+,a0 ; Pop stack
 	rts
@@ -1858,6 +1867,7 @@ ft_octs:
 ;---------------------------------------------------------- 
 ; a0 Shape structure
 copybob:
+
 	; Debug color blend
 	;lea colorblend,a1
 	; Blend 1 to 2 with 50%
@@ -1935,7 +1945,7 @@ copybob:
 	lea copybobDitherPlane3,a2
 	move.w #2,d3
 	bsr computedithermode
-	
+    
 	bra .next
 .useColor1Only:
 	move.w #2,copybobModePlane1
@@ -2034,6 +2044,8 @@ copybob:
 .endplane3:	
 	
 	rts
+    
+    
 ;---------------------------------------------------------- 
 ; A0 should not be changed, d0 and d1 d2 neither
 	; d0 color1
@@ -2139,6 +2151,9 @@ DisplayBob:
 	lsl.l #6,d6 ; *64
 	lsr #1,d7 ; Compute width words
 	add.l d7,d6 ; bltsize
+    
+    bsr	waitblitter
+    
 	; Modulos
 	MOVE.W	#0,$DFF064	; MOD A Source
 	MOVE.W	d4,$DFF060	; MOD C destination as source. Modulox2
@@ -2176,7 +2191,6 @@ DisplayBob:
 	;         DDDDABCDMMMMMMMM
 	; Give0: AbC (pattern) LF5 aBc=LF2 abc=LF0  
 .next	
-	Bsr	waitblitter
 	
 	move.w d6,$dff058 ; BltSize, height*64 , width launch transfert
 	;Move.w	#[8*1*64]+3,$dff058 ; BltSize, height*64 , width launch transfert
@@ -2184,7 +2198,7 @@ DisplayBob:
 	Rts
 	
 waitblitter:	
-    tst.w	$dff002
+    ;tst.w	$dff002
 .bltwt:	
     btst	#6,$dff002
     bne.s   .bltwt
@@ -2288,8 +2302,6 @@ Fx2_DrawPixel:
     add.w #(320-(79+85)-10)/2,d1 ; Center X
     add.w #(87-30)/2,d2 ; Center Y
 
-    ;move.b d1,$100
-    ;move.b d2,$101
     mulu.w #40,d2 ; Y
     move.b d1,d3 ; X
     lsr.b #3,d1 ; /8 = byte (0 to 40)
@@ -3389,8 +3401,8 @@ Fx4_Loop:
     
    move.l	(LDOS_BASE).w,a6
    jsr		LDOS_MUSIC_GET_POSITION(a6) ; d0 = position d1 = pattern
-   move.w d0,$100
-   move.w d1,$102
+   ;move.w d0,$100
+   ;move.w d1,$102
 
    cmp.w #7,d0
    bne .noend
