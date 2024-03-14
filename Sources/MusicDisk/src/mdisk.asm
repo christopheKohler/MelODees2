@@ -54,8 +54,8 @@ DISPLAYDEBUGMEMORY=0 ; 1 display memory
 ;NOINTRO=1 ; 1 = skip intro
 SHOWRASTER=0 
 
-;ALTERNATETIME = 15*50 ; Switch palette each  
-ALTERNATETIME = 60*50 ; Switch palette each
+ALTERNATETIME = 15*50 ; Switch palette each  
+;ALTERNATETIME = 60*50 ; Switch palette each
     
 ;----------------------------------------------------------------
 ; 
@@ -92,7 +92,8 @@ startup:
     bsr AllocateChipMemForParalax ; Allocate 90K at end of chip mem
     
     ; -- Loading first module (same code as in DoLoading !)
-    move.w #1,currentmusic ; Start with first module
+    ;move.w #1,currentmusic ; Start with first module
+    move.w #4,currentmusic ; Plane
 	; Preload music
 	move.l (LDOS_BASE).w,a6
 	move.w currentmusic,d0 ; 1 to 8
@@ -204,7 +205,7 @@ BigLoop: ; ------------------------------------------------------
     ; ----- BIG LOOP END -------------------------------------------
    
 MouseClicTest:
-    add.b #1,$100 ; DEBUG
+    ;add.b #1,$100 ; DEBUG
 
     ; If here, module is not loading.
     cmp.b #1,gui_flag_mouse_on_next
@@ -376,7 +377,7 @@ switchtext1:
     ; random choose for text1, order vary.
     lea TEXTSCROLLSTABLE,a0
     bsr GetRandom ; d0.w
-    move.w d0,$100
+    ;move.w d0,$100
     
     move.l #TEXTMODULE1,(a0)
     
@@ -421,7 +422,7 @@ AllocateChipMemForParalax:
     move.l d0,paralaxChipPtr
     ; Clear start zone. 
     move.l d0,a0
-    move.w #10-1,d1
+    move.w #(paralaxsize/40)-1,d1 ; Bug 1 line appearing, so erase the full zone
 .clearoneline:
     move.l #0,(a0)+ ; 4 bytes
     move.l #0,(a0)+ ; 4 bytes
@@ -445,12 +446,12 @@ AllocateChipMemForParalax:
     add.l #planesparalax2_offset,a0
     move.l a0,4(a1)
     ; Set Plans dff100 values
-    move.l #$01005200,BackgroundPlanControl ;  5 plans  
+    move.l #$01005200,BackgroundPlanControl ;  5 plans 
+    move.l #$01080028,BackgroundModuloControl ; Set modulos
+    
     move.l #$01004200,BackgroundPlanControl3 ;  4 plans  
-    ; Set modulos
-    move.l #$01080028,BackgroundModuloControl
-    move.l #$01080002,BackgroundModuloControl2
-    move.l #$01080050,BackgroundModuloControl3
+    move.l #$01080002,BackgroundModuloControl2 ; Modulos
+    move.l #$01080050,BackgroundModuloControl3 ; Modulos
     rts
     
 FreeChipMemForParalax:
@@ -513,7 +514,8 @@ frame_count:
     
 alternatepalette_counter: ; number of frame when palette is changed
     dc.w    0
-    
+plane_counter: ; use to create plane animation
+    dc.w    0
 
 
 music_last_pattern_pos: ; use for detection of loop of music
@@ -706,6 +708,7 @@ LoadingModule:
     ; Delete background line by line. (at least 2 seconds)
     bsr EraseParalaxBackground
     bsr FreeChipMemForParalax
+    bsr LaunchGradientTransition ; ask palette transition
     ;move.w #100,d0 ; 2 seconds (for fade and stop)
     ;jsr waitxxFrames ; Wait xx second    
     ; Free memory of music
@@ -816,7 +819,7 @@ LoadingModule:
 	jsr LDOS_DATA_LOAD(a6) ; Alloc Fast mem. Blocking function. d0.l = adress, d1.l = size   
     move.l d0,LoadedLevel
     
-    move.b #$77,$101 ; Debug
+    ;move.b #$77,$101 ; Debug
     
     ; If big module (2), then realloc mem for paralax
     cmp.w #1,haveenoughchip
@@ -827,7 +830,7 @@ LoadingModule:
     bsr AllocateChipMemForParalax ; Realloc
 .nobigmodule2:  
 
-    move.b #$88,$101 ; Debug
+    ;move.b #$88,$101 ; Debug
 
     ; -- Construct graphic data from loaded level data.
     move.w #1,SpriteStopUpdate
@@ -1712,6 +1715,27 @@ OFFSETNullSpritePtr=11*4;
 .end
     ; -- Process specific animation for sprites. ------------
     
+    
+    cmp.w #4,currentmusic ; Plane, 2 frames anim, 2 set
+    bne .nomusic4
+    lea   SpriteFrameTable,a0 
+    ; Create 2 sets of anims
+    ; 0  Frame1 Frame1
+    ; 4  Frame2 Frame2
+    ; 8  Frame3 0
+    ; 12 Frame4 Frame3
+    ; 16 0      Frame4
+    move.l 12(a0),d0
+    move.l d0,16(a0)
+    move.l 8(a0),d0
+    move.l d0,12(a0)
+    move.l #0,8(a0)
+    ; Reset animation counter
+    move.w #0,plane_counter
+    bra .endallsprite
+.nomusic4:  
+    
+    
     cmp.w #5,currentmusic ; Whale 4 frames. Add two ping pong frame at end
     bne .nomusic5
     lea   SpriteFrameTable,a0 ; 4 frames, create 6 frames. 
@@ -1736,6 +1760,28 @@ OFFSETNullSpritePtr=11*4;
 .endallsprite:
 
 .debugnosprite
+    rts
+
+PlaneSwitchAnim:
+    movem.l d0-d1/a0,-(a7)
+    lea   SpriteFrameTable,a0 
+    ; Create 2 sets of anims
+    ; 0  Frame1 Frame3
+    ; 4  Frame2 Frame4
+    ; 8  0      0
+    ; 12 Frame3 Frame1
+    ; 16 Frame4 Frame4
+    ; Switch 12 and 0
+    move.l 0(a0),d1 
+    move.l 12(a0),d0
+    move.l d0,0(a0)
+    move.l d1,12(a0)
+    ; Switch 16 and 4
+    move.l 4(a0),d1 
+    move.l 16(a0),d0
+    move.l d0,4(a0)
+    move.l d1,16(a0)
+    movem.l (a7)+,d0-d1/a0
     rts
 
 ; ------------------------------------------- 
@@ -2264,14 +2310,59 @@ VideoIrq:
     bsr Paralax_3_Background ; BLITTER operation
  .noparalaxPhase2:
  
- 
+
+    ; If song 4, move plane and switch anim.
+    cmp.w #4,currentmusic
+    bne .nomusic4
+    cmp.b #1,flag_module_is_loading
+    beq .nomusic4 ; Not when loading
+    move.w plane_counter,d0 ; Keep old value
+    add.w #1,plane_counter
+    clr.l d1
+    move.w plane_counter,d1
+    ; -- Move down, during 32 seconds
+    cmp.w #1600,d1 
+    bhi .planenostep1
+    ; During 32 seconds, go down
+    ; 0 to 32*50 ... 0 to 1600
+    move.w #133,SprCentral_y
+    lsr.w #6,d1 ; /64 ... 0 to 25
+    add.w d1,SprCentral_y
+    bra .nomusic4
+.planenostep1: 
+    ; Move up during 16 seconds
+    cmp.w #2400,d1
+    bhi .planenostep2   
+    ; animation switch ?
+    cmp.w #1600,d0
+    bne .noswitchplane
+    bsr PlaneSwitchAnim
+.noswitchplane: 
+    ; During 16 seconds go up
+    ; 1600 to 2400
+    ; need to remove 25 steps.
+    sub.w #1600,d1
+    lsr.w #5,d1 ; /32 , 0 to 25
+    move.w #25,d2
+    sub.w d1,d2 ; d2 = 25 to 0
+    move.w #133,SprCentral_y
+    add.w d2,SprCentral_y
+    bra .nomusic4
+.planenostep2: 
+    ; -- Animation over, restart
+    ; reset counter and switch anim
+    move.w #0,plane_counter
+    move.w #133,SprCentral_y
+    bsr PlaneSwitchAnim
+.nomusic4
+    ;move.w SprCentral_y,$100
+
     ; switch palette
     add.w #1,alternatepalette_counter
     cmp.w #ALTERNATETIME,alternatepalette_counter
     bne .noswitchpal
     bsr LaunchGradientTransition ; Switch between set 1 and 2.
 .noswitchpal:
-
 
 	rts
 ;---------------------------------------------------------------

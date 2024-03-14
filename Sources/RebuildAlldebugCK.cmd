@@ -1,17 +1,18 @@
 @echo off
 del MelODees.adf
 
-REM cd Intro
-REM call BuildAndRunDemo.bat -b
-REM cd..
+cd Intro
+call BuildAndRunDemo.bat -b
+cd..
+
+cd Loader
+call BuildAndRunDemo.bat -b
+cd..
 
 cd MusicDisk
 call BuildAndRunDemo.bat -b
 cd..
 
-REM cd 03_fadetest
-REM call BuildAndRunDemo.bat -b
-REM cd..
 
 ..\LDOS\install script.txt MelODees.adf
 

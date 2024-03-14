@@ -1,6 +1,6 @@
+Loader\Loader.bin
 Tebirod-Earth_sorrow_alt.p61
 Intro/Intro.bin
-Empty/Empty.bin
 MusicDisk/mdisk.bin
 mA2E-Limitless_Delights.p61
 datas/Level5.bin

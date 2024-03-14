@@ -1,4 +1,4 @@
-@set DemoName=mdisk
+@set DemoName=Loader
 
 @echo off
 @set path=%path%;..\..\LDOS\vasm\
@@ -20,7 +20,6 @@ goto FINISHED
 "..\..\..\ToolsForFramework\winuae\winuae_ckdebug.exe" -config="configs\a500.uae" -s floppy0="%~dp0%DemoName%.adf"
 
 :FINISHED
-REM pause
-
+REM  pause
 
 echo Done!

@@ -57,17 +57,17 @@
     ;bra DEBUGFX4
     
     ; -- DEBUG, go to next effect
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_MUSIC_STOP(a6)
-;    move.w #100,d0
-;    bsr WaitFrames ; Wait 2 second (music fade out)    
-;    ; TODO Unalloc Music space
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_FREE_MEM_MUSIC(a6)    
-;    move.l	(LDOS_BASE).w,a6
-;    jsr		LDOS_PRELOAD_NEXT_FX(a6)
-;    ; we now can terminate this part by RTS. Next part will execute a start music command
-;    rts         ; end of this part
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_MUSIC_STOP(a6)
+    move.w #100,d0
+    bsr WaitFrames ; Wait 2 second (music fade out)    
+    ; TODO Unalloc Music space
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_FREE_MEM_MUSIC(a6)    
+    move.l	(LDOS_BASE).w,a6
+    jsr		LDOS_PRELOAD_NEXT_FX(a6)
+    ; we now can terminate this part by RTS. Next part will execute a start music command
+    rts         ; end of this part
     ; -- end Debug
 
     ; -- FX1 ---------------------------------------------------
@@ -2650,6 +2650,8 @@ Fx3_Init:
     bsr setPalette 
     bsr SetBackPalette
     
+    move.w #SCROLLMINI,scrollcount ; For faster machines, be sure that scroll have done the minimum steps. USe SCROLLMINI so will not work for first time.
+    
     ; Clean video memory
     bsr waitblitter ; Wait blitter to be ready
 	move.w #0,$dff066			;destination modulo
@@ -2691,7 +2693,7 @@ Fx3_Loop:
     bge .ok
     bsr pollVSync
     bra .testVBL
-.ok
+.ok:
     bsr triplebufferswap
     move.w #0,VBLCount ; Reset VBL count.
     rts
@@ -2702,6 +2704,7 @@ Fx3_Irq:
     
 
 Fx3_DoScroll:
+    add.w #1,scrollcount
     bsr waitblitter ; Wait blitter to be ready
 	MOVE.W	#0,$DFF064	; MOD A Source
 	MOVE.W	#0,$DFF066	; MOD D Dest
@@ -2770,6 +2773,10 @@ LettersSequence:
   
 forceWait: ; For Space character
     dc.w    0
+scrollcount:
+    dc.w    0 ; Be sure that scroll have enough moved before launching next letter.
+    
+SCROLLMINI = 58 ; // Minimum pixels before drawing next letter (for faster machines)
 
 ; -----------------------------------------------------
 Fx3_drawletter:
@@ -2780,6 +2787,20 @@ Fx3_drawletter:
     sub.w #1,forceWait
     rts
 .nowait:
+    ; If draw steps is over
+    move.w scrollcount,$100
+    move.l drawstep,$102
+    cmp.l #(NBSTEPS-1)*100,drawstep ; Do we just ended a letter ?
+    bne .nowaitscroll
+    cmp.w #SCROLLMINI,scrollcount ; for faster machines, be sure scrolling have move enough
+    bhi .nowaitscroll
+    rts
+.nowaitscroll:
+
+    cmp.l #(NBSTEPS-1)*100,drawstep ; Do we just ended a letter ?
+    bne .noresetscroll
+    move.w #0,scrollcount ; reset scroll count
+.noresetscroll:
 
     ; Draw Letter
     move.l currentletter,a1 ; A1 current polygon
