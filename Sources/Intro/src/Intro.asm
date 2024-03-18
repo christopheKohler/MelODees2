@@ -57,17 +57,17 @@
     ;bra DEBUGFX4
     
     ; -- DEBUG, go to next effect
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_MUSIC_STOP(a6)
-    move.w #100,d0
-    bsr WaitFrames ; Wait 2 second (music fade out)    
-    ; TODO Unalloc Music space
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_FREE_MEM_MUSIC(a6)    
-    move.l	(LDOS_BASE).w,a6
-    jsr		LDOS_PRELOAD_NEXT_FX(a6)
-    ; we now can terminate this part by RTS. Next part will execute a start music command
-    rts         ; end of this part
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_MUSIC_STOP(a6)
+;    move.w #100,d0
+;    bsr WaitFrames ; Wait 2 second (music fade out)    
+;    ; TODO Unalloc Music space
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_FREE_MEM_MUSIC(a6)    
+;    move.l	(LDOS_BASE).w,a6
+;    jsr		LDOS_PRELOAD_NEXT_FX(a6)
+;    ; we now can terminate this part by RTS. Next part will execute a start music command
+;    rts         ; end of this part
     ; -- end Debug
 
     ; -- FX1 ---------------------------------------------------
@@ -2788,8 +2788,8 @@ Fx3_drawletter:
     rts
 .nowait:
     ; If draw steps is over
-    move.w scrollcount,$100
-    move.l drawstep,$102
+    ;move.w scrollcount,$100
+    ;move.l drawstep,$102
     cmp.l #(NBSTEPS-1)*100,drawstep ; Do we just ended a letter ?
     bne .nowaitscroll
     cmp.w #SCROLLMINI,scrollcount ; for faster machines, be sure scrolling have move enough
@@ -3200,16 +3200,24 @@ drawlineinarray:
 ;    add.l d3,a2 ; Next line in Y array (up or down) ; CK : Why ?
 ;.noup
 
+    ; Add 0.5 to everyone, so do not change line for small values.
+    ; USELESS
+    ;add.l #$00008000,d1 ; Add 0.5 to round the pixel position
+
+
     ; Go left or right
-    swap d1
-    cmp.l #0,d5
-    bpl .goright
-    sub.l #$00008000,d1 ; Go left, sub 0.5 to round the pixel position
-    bra .goend
-.goright    
-    add.l #$00008000,d1 ; Add 0.5 to round the pixel position
-.goend
-    swap d1
+    ; This seem bugged !! ==> Yes, USELESS
+;    swap d1
+;    cmp.l #0,d5
+;    bpl .goright
+;    ;sub.l #$00008000,d1 ; Go left, sub 0.5 to round the pixel position
+;    sub.l #$00000800,d1 ; Go left, sub 0.5 to round the pixel position
+;    bra .goend
+;.goright    
+;    ;add.l #$00008000,d1 ; Add 0.5 to round the pixel position
+;    add.l #$00000800,d1 ; Add 0.5 to round the pixel position
+;.goend
+;    swap d1
     
 .alllines
     move.b d1,(a2) ; Fill array
@@ -3514,6 +3522,7 @@ LetterA: ; Index from 1 to 49 ... (code need to remove 1)
     dc.b 2,7,12,17,19,11,5,2,$fe ;      40,45,46,41,32,2,$fe
     dc.b 12,40,45,46,41,32,21,17,12,$fe
     dc.b 21,32,29,30,22,21,$fe
+    dc.b 21,32,29,21,$fe ; add this to fix hole
     dc.b 11,19,22,30,26,11,$fe
     dc.b 30,35,43,48,49,44,26,30,$fe
     dc.b $ff
@@ -3576,7 +3585,8 @@ LetterT:
     dc.b $ff
 LetterI:   
     dc.b 3,8,21,18,3,$fe
-    dc.b 21,41,47,43,22,18,21,$fe 
+    ;dc.b 21,41,47,43,22,18,21,$fe 
+    dc.b 13,41,47,43,22,18,13,$fe 
     dc.b $ff
 LetterL:    
     dc.b 2,7,40,46,32,8,2,$fe
@@ -3590,7 +3600,10 @@ Logo: ; 16 colors, 320x64
         Incbin	"data/logo.ami" 
         
 LogoSmall: ; 8 colors, same as 3D. 288x11 pixels
-        Incbin	"data/LogoSmall.ami" 
+        Incbin	"data/LogoSmall.ami"
+
+LogoRSE:
+        Incbin "data/LogoRSE.ami"
         
         blk.b 40*1,$F5 ; Padding data , overwritted by LDOS system ?
         

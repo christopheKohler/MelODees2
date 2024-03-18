@@ -5,6 +5,7 @@ SET PALSTRIP=..\..\..\ToolsForFramework\StripImagePalette\Release\StripImagePale
 
 %GFXCONV% data/LogoSmall.png data/LogoSmall.ami imagepal
 
+%GFXCONV% data/LogoRSE.png data/LogoRSE.ami imagepal
 
 echo Done!
 pause

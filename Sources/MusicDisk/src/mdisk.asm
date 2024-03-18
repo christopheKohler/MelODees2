@@ -54,7 +54,7 @@ DISPLAYDEBUGMEMORY=0 ; 1 display memory
 ;NOINTRO=1 ; 1 = skip intro
 SHOWRASTER=0 
 
-ALTERNATETIME = 15*50 ; Switch palette each  
+ALTERNATETIME = 30*50 ; Switch palette each  
 ;ALTERNATETIME = 60*50 ; Switch palette each
     
 ;----------------------------------------------------------------
@@ -64,13 +64,13 @@ ALTERNATETIME = 15*50 ; Switch palette each
 	code_f
 	
 startup:
+    bsr InitRandom
+    
 	lea	$DFF000,A6	
     move.l	#$28613091,$8e(a6)	; Screen definition and size
 	move.l	#$003800d0,$92(a6)	; 40 de large
 	move.w	#%1000001111111111,$96(a6) ; Turn on DMA Bit 15=Set. 10=NastyBlitter 9=AllDma 8-4=DMAs 3-0=Audio
     
-    bsr InitRandom
-	
     move.b #1,first_launch ; first music counter
    
     ; Aga compatibility ;fmode DFF1FC,0 ;Chip Ram fetch mode (0=OCS)
@@ -93,7 +93,7 @@ startup:
     
     ; -- Loading first module (same code as in DoLoading !)
     ;move.w #1,currentmusic ; Start with first module
-    move.w #4,currentmusic ; Plane
+    move.w #3,currentmusic ; Plane
 	; Preload music
 	move.l (LDOS_BASE).w,a6
 	move.w currentmusic,d0 ; 1 to 8
@@ -403,13 +403,14 @@ GetRandom:
 	Or.w	d2,d1
 	Move.w	d1,SBPA
     move.w  d1,d0
+    move.w d0,$100 ; Debug
 	Movem.l	(a7)+,d1-d2
 	Rts
 SBPA: ; Sequence Binaire Pseudo Aleatoire	
     Dc.w	$7fa5
 ;-----------------------------------------------------------------------
 InitRandom:				; call once at init
-	Move.b	$dff006,SBPA+1
+	Move.w	$dff006,SBPA
 	Rts
 
 ; -------------------------------------------------------------------------------
@@ -3686,8 +3687,7 @@ TEXTLOADING2:
 TEXTMODULE2: ; Should allow 1900 characters
     
     dc.b "..... You are listening to ",1,"HI-SCHOOL GIRLS",0," by ",1,"ACEMAN",0," (2'23). Art by ",1,"RAHOW/REBELS",0,"..... Well hello there, here is ",1,"AceMan",0," at the keyboard. It is great pleasure to participate again in the second part of this noble music disc! Such fun to see what the graphic designers came up with while listening to my tunes :) So, about the tune. I made this one with the idea of jazz musician playing in the dirty night streets of the city or maybe some sleazy bar. I collected samples from all sorts of sources - I found chords and drums in some random packages, sax solos are chopped and mixed sequences from freesound.org. Everything was kept in lofi style (due to the memory limitations of the A500, but it also fits nice with the general idea). I was terribly missing some dialogue insert, so after a little research I chose Matthew McConaughey's quote from the movie 'Dazed and Confused' :) I hope you enjoy this piece. Cheers!"
-    ; 800 characters left. (Rahow text)
-    dc.b ".....   RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here. RAHOW text 1 here."
+    ; 800 characters left. (Rahow want only 1 text, I put on next one.)
     
     dc.b ".....          ",$FF
     even
@@ -3707,7 +3707,8 @@ TEXTLOADING3:
 TEXTMODULE3: ; Should allow 2800 chracters
     dc.b "..... You are listening to ",1,"IZAR",0," by ",1,"NAINNAIN",0," (3'35). Art by ",1,"RAHOW/REBELS",0,"..... Hello dear demoscene friends, I hope my humble contribution will entertain you. I would like to greet all the members of our group, Resistance, as well as all the artists and developers who maintain alive our wonderful platforms from our childhood...."
     ; 2400 left for RAHOW text.
-    dc.b ".....   RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here. RAHOW text 2 here."
+    dc.b "RAHOW at the kayboard now ... Thanx to Oriens, to have came in 2018 to involve me with the The Fall demo, you made me realise my dream to be in the winner prod of a big Amiga demo competition." 
+    ; 2200 left here.    
     
     dc.b ".....          ",$FF
     
@@ -3728,7 +3729,7 @@ TEXTLOADING4:
 TEXTMODULE4: ; Should allow 1600 characters
     dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p      "
     ; 900 characters left.
-    dc.b " ORIENS back at the keyboard. My next contribution to the Amiga scene will be a game named Ninja Carnage. I've developed it for 8-bit computers such as the Commodore 64 and Amstrad CPC. It has also been ported to the Spectrum by Clive Townsend. Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon.                "
+    dc.b " ORIENS back at the keyboard. My next contribution to the Amiga scene will be a game named Ninja Carnage. I've developed it for 8-bit computers (Commodore 64 and Amstrad CPC). It has also been ported to the Spectrum by Clive Townsend. Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon.                "
     ; 500 characters left.
     
     dc.b ".....          ",$FF
@@ -3772,7 +3773,7 @@ TEXTLOADING6:
 TEXTMODULE6: ; 2000 characters
     dc.b "..... You are listening to ",1,"BALLADE",0," by ",1,"KOOPA",0," (2'42). Art by ",1,"FRA & ORIENS",0,"..... "
     dc.b 1,"KOOPA",0," on Keybaord. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
-    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personnal greetings: ",1," Locust2802, Rodrik, Bird/Syntex, Deckard, Wookie, friends of Deadliners Soundy, Made, Dascon, Dan and Facet from Lemon., Leonard and Mon from Oxygene, Ziggy Stardust,  ... ",0," (to be continued) ...."
+    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personnal greetings: ",1," Locust2802, Rodrik, Bird from Syntex, Deckard, Wookie, Soundy Made & Dascon from Deadliners, Dan & Facet from Lemon., Leonard & Mon from Oxygene, Ziggy Stardust, Sodapop",0,"."
     ; 1300 characters left.
     dc.b ".....          ",$FF
     
