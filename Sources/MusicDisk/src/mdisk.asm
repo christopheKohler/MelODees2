@@ -54,8 +54,8 @@ DISPLAYDEBUGMEMORY=0 ; 1 display memory
 ;NOINTRO=1 ; 1 = skip intro
 SHOWRASTER=0 
 
-ALTERNATETIME = 30*50 ; Switch palette each  
-;ALTERNATETIME = 60*50 ; Switch palette each
+;ALTERNATETIME = 15*50 ; Switch palette each  
+ALTERNATETIME = 60*50 ; Switch palette each
     
 ;----------------------------------------------------------------
 ; 
@@ -92,8 +92,10 @@ startup:
     bsr AllocateChipMemForParalax ; Allocate 90K at end of chip mem
     
     ; -- Loading first module (same code as in DoLoading !)
-    ;move.w #1,currentmusic ; Start with first module
-    move.w #3,currentmusic ; Plane
+    move.w #1,currentmusic ; Start with first module
+    ;move.w #3,currentmusic ; Plane
+    ;move.w #6,currentmusic ; Butterfly
+    ;move.w #7,currentmusic ; SnC city futurist
 	; Preload music
 	move.l (LDOS_BASE).w,a6
 	move.w currentmusic,d0 ; 1 to 8
@@ -761,6 +763,11 @@ LoadingModule:
 	move.l (LDOS_BASE).w,a6
 	jsr LDOS_MUSIC_RELOC(a6) ; Blocking function.
 	
+    ; TODO: Wait here, kill DMA ?
+    move.w #50,d0 ; 1 seconds
+    jsr waitxxFrames ; Wait xx second
+	move.w	#%0000000000001111,$dff096 ; Turn off Audio Dma. 4 Channels
+
 	;move.b #$22,$101 ; Debug
 
 	move.l (LDOS_BASE).w,a6
@@ -803,7 +810,8 @@ LoadingModule:
 
     ; -- Load data
     ; Free previous data
-    ; this only releasing the data loaded of free also some other data.
+    ; this only releasing the data loaded or free also some other data ??
+    ; TODO Check this
     move.l	(LDOS_BASE).w,a6
     jsr		LDOS_FREE_MEM_DATA(a6) 
 
@@ -817,7 +825,7 @@ LoadingModule:
     move.w currentmusic,d0
     lsl.w #1,d0 ; *2
 	add.w #3,d0 ; To get the correct data level
-	jsr LDOS_DATA_LOAD(a6) ; Alloc Fast mem. Blocking function. d0.l = adress, d1.l = size   
+	jsr LDOS_DATA_LOAD(a6) ; Alloc Fast mem (TAG DATA). Blocking function. d0.l = adress, d1.l = size   
     move.l d0,LoadedLevel
     
     ;move.b #$77,$101 ; Debug
@@ -3630,13 +3638,13 @@ TEXTLOADING:
 ; Textes: 400 characters for 30 secondes. 800 for 1 minute. (approx)
 	
 TEXTMAIN:
-	dc.b "Resistance, back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod",0,".                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard",0," of ",1,"Oxygene",0,". P61 routine by Photon/Scoopex. Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox, Mop.          Greetings to these groups: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene",0,".                 "
-    dc.b "If you want to read the full text for each module, you can use the LOOP icon on the control interface.        "
-    dc.b "Here are some technical details about that music disk. It is running on an Amiga 500 OCS with 1 MB of RAM. It also runs on all Amiga models and can be launched from a hard drive (execute hdd_loader.exe alongside the ADF file). The total uncompressed data size of the modules is 1120 KB. If you only have 512 KB of chip RAM, I will need to stop the music and free the scrolling memory to load the second module, HI-SCHOOL GIRLS, which is 375 KB! Each module has its 32-color background. The total data on the disk is 1600 KB once uncompressed. The music disk runs with a customized version of the LDOS track system by LEONARD. Thanks again to him for sharing.      "
+	dc.b "",1,"RESISTANCE",0,", back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod.",0,"                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard/Oxygene",0,". Debug help by ",1,"StringRay",0,". P61 routine by ",1,"Photon/Scoopex",0,". Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: ",1,"Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox.",0,"          Greetings to: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene.",0,"                 "
+    dc.b "If you want to read the full text for each module, you can use the ",1,"LOOP",0," icon on the control interface.        "
+    dc.b "Here are some technical details about that music disk. It is running on an Amiga 500 OCS with 1 MB of RAM. It should runs on most Amiga models and can be launched from a hard drive (execute hdd_loader.exe, while having the ADF file in the same directory). The total uncompressed data size of the modules is 1120 KB. If you only have 512 KB of chip RAM, It will need to stop the music and free the scrolling memory to load the second module, HI-SCHOOL GIRLS, which is 375 KB! Each module has a 32-color background. The total data on the disk, is 1600 KB once uncompressed. The music disk runs with a customized version of the LDOS track system by ",1,"LEONARD",0,". Thanks again to him for sharing.      "
     
-    dc.b "If you enjoy this music disk, you should consider listening to the first opus, Mel'O'Dees, released in 2021. On PC, you can listen to Marine Melodies (2022). Also, try SNES Music Pack 1 (2021). In any case, make sure to turn on your best hi-fi system to fully appreciate these great tunes. "
+    dc.b "If you enjoy this music disk, you should consider listening to the first opus, ",1,"Mel'O'Dees",0,", released in 2021. On PC, you can listen to ",1,"Marine Melodies",0," (2022). Also, try ",1,"SNES Music Pack 1",0," (2021). In any case, make sure to turn on your best hi-fi system to fully appreciate these great tunes. "
 
-    dc.b "We are currently preparing the next music disks. If you want to contribute, feel free to contact us. Musicians and artists are welcomed.          "
+    dc.b "We are currently working on issue 3 of this series. If you want to ",1,"contribute",0,", either with a tune or design, feel free to ",1,"contact",0," us.         "
     
     dc.b "                                        ",$FF
   
@@ -3655,7 +3663,7 @@ TEXTLOADING1:
 
 TEXTMODULE1:
     ; As these text are too long, I'll randomly switch the order (Once Maze+Vectrex28, once Vectrex28+Maze)
-    dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28. ",0
+    dc.b "..... You are listening to ",1,"LIMITLESS DELIGHTS",0," BY ",1,"mA2E",0," (1'50). Art by ",1,"Vectrex28.",0
     dc.b "..... Hey, ",1,"mA2E",0," here. So a short scrolltext for my tune is coming up. Not sure what to write, but I guess I'll figure out something along the way. The tune you are listening right now if you don't have turned the volume all the way to zero, is a old tune I started on over two years ago, but never finished it before now. It's nothing fancy, and were planned for an other project which never happened. I felt it had been a wip long enough now. Anyway, I enjoyed making it. So not much more to say actually. Some quick salutations to my friends in ",1,"Desire, Fatzone, Moods Plateau and Proxima..",0," Also a big greetings and thanks to my wife that let me sit hours after hours composing. And also as mentioned before, thanks to the whole Amiga community and their support and inspiration. Without you, I would have stopped making music many many years ago. ",1,"mA2E",0," out..... "
     ; Scroll text end after "my part on this music disk". 1400 characters left.
     dc.b "Yoooooooo! ",1,"Vectrex28",0," here at the keyboard! First off, sorry it took so long. Having a full-time job is no joke really... But I'm glad I finally managed to finish my part on this music disk. It was first supposed to be a jungle, but it ended up being half a jungle, half a mountain backdrop. But I'm not complaining, as it turned out to be quite neat anyway. I don't really know what else to put in here, maybe just a few greetz to everyone at ",1,"Resistance?",0," I'm a bit tipsy anyway so remembering might not be my strong suit at the time I'm writing this, I've had a few sours and some sake at the local izakaya, and even with higher than average alcohol tolerance it does affect the way you write your scrollies, heh... Some extra greetz go to the folks in the PC Engine scene, which is the console I am making a game on that the moment. In no particular order: ",1,"Aetherbyte, David Shadoff, Turboxray, Yoshiharu Takaoka, asie, Gorimuchuu, Chris Covell, and all I forgot.",0," It's still a small community but some of those peeps are super talented! Also looking forward at perhaps making a PC Engine/Supergrafx intro at least for Resistance. It truly is a piece of hardware I love, and on which, despite being 8-bit, you could do a lot more than you might think, even surpassing the Megadrive on many aspects. But I'm likely getting ahead of myself, despite my love for the 'Engine, it's been an honour to be part of a prod on a machine as iconic as the Amiga (Love both my 500 and my 1200), and looking forward to be part of another music disk if I ever get the chance (and the time especially) to make it happen. Peaceeeeee"
@@ -3707,7 +3715,7 @@ TEXTLOADING3:
 TEXTMODULE3: ; Should allow 2800 chracters
     dc.b "..... You are listening to ",1,"IZAR",0," by ",1,"NAINNAIN",0," (3'35). Art by ",1,"RAHOW/REBELS",0,"..... Hello dear demoscene friends, I hope my humble contribution will entertain you. I would like to greet all the members of our group, Resistance, as well as all the artists and developers who maintain alive our wonderful platforms from our childhood...."
     ; 2400 left for RAHOW text.
-    dc.b "RAHOW at the kayboard now ... Thanx to Oriens, to have came in 2018 to involve me with the The Fall demo, you made me realise my dream to be in the winner prod of a big Amiga demo competition." 
+    dc.b "",1,"RAHOW",0," at the kayboard now ... Thanx to ",1,"Oriens",0,", to have came in 2018 to involve me with the ",1,"The Fall",0," demo, you made me realise my dream to be in the winner prod of a big Amiga demo competition." 
     ; 2200 left here.    
     
     dc.b ".....          ",$FF
@@ -3727,9 +3735,9 @@ TEXTLOADING4:
     even
  
 TEXTMODULE4: ; Should allow 1600 characters
-    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"resistance",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p      "
+    dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"RESISTANCE",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p      "
     ; 900 characters left.
-    dc.b " ORIENS back at the keyboard. My next contribution to the Amiga scene will be a game named Ninja Carnage. I've developed it for 8-bit computers (Commodore 64 and Amstrad CPC). It has also been ported to the Spectrum by Clive Townsend. Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon.                "
+    dc.b " ",1,"ORIENS",0," back at the keyboard. My next contribution to the Amiga scene will be a game named ",1,"Ninja Carnage",0,". I've developed it for 8-bit computers (Commodore 64 and Amstrad CPC). It has also been ported to the Spectrum by ",1,"Clive Townsend",0,". Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon. Stay tuned.               "
     ; 500 characters left.
     
     dc.b ".....          ",$FF
@@ -3749,7 +3757,7 @@ TEXTLOADING5:
     even
  
 TEXTMODULE5: ; 4000 characters available.
-    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ST-XX disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!"
+    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ",1,"ST-XX",0," disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!"
     ; 3500 characters left.
     ; RJ Mical text here ??
     
@@ -3772,8 +3780,8 @@ TEXTLOADING6:
  
 TEXTMODULE6: ; 2000 characters
     dc.b "..... You are listening to ",1,"BALLADE",0," by ",1,"KOOPA",0," (2'42). Art by ",1,"FRA & ORIENS",0,"..... "
-    dc.b 1,"KOOPA",0," on Keybaord. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
-    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personnal greetings: ",1," Locust2802, Rodrik, Bird from Syntex, Deckard, Wookie, Soundy Made & Dascon from Deadliners, Dan & Facet from Lemon., Leonard & Mon from Oxygene, Ziggy Stardust, Sodapop",0,"."
+    dc.b 1,"KOOPA",0," on the keyboard. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
+    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personal greetings:  ",1,"Locust2802, Rodrik, Bird/Syntex, Deckard, Wookie, friends of Deadliners Soundy, Made, Dascon, Dan and Facet from Lemon., Leonard & Mon from Oxygene, Ziggy Stardust",0,""
     ; 1300 characters left.
     dc.b ".....          ",$FF
     
@@ -3794,7 +3802,7 @@ TEXTLOADING7:
 TEXTMODULE7: ; 2000 characters
     dc.b "..... You are listening to ",1,"THROUGH THE GATE",0," by ",1,"OK3AN0S/TEK",0," (2'33). Art by ",1,"SnC",0,"..... ",1,"OK3AN0S",0," on the keyboard. I set myself a reminder for all the time that I err. So that I may always remember that I am but a prisoner. This module is one of the rare ones I have composed with a sad melody. I usually make happy and cheesy melodies when composing chiptunes. For this one, I wanted to make something which sounded like the old cracktros or some kind of RPG like games I played on 8bit consoles. I'm pretty satisfied with the result as it sounds exactly how I wanted it to be.   "
     
-    dc.b "",1,"SnC",0," on keyboard. Heyo friends - and welcome to another fine musicdisk by your favourite misfits! We hope you enjoy the nice tunes by our super talented house musicians - on the beloved ",1,"AMIGA",0,"! :: I just want to thank the rest of the team for all the amazing work put into this disk, a round of applause to all of you for making it possible, and for keeping the Amiga alive! Enjoy the show - Enjoy Amiga" 
+    dc.b "",1,"SnC",0," on keyboard. Heyo friends - and welcome to another fine musicdisk by your favourite misfits! We hope you enjoy the nice tunes by our super talented house musicians - on the beloved ",1,"AMIGA",0,"! :: I just want to thank the rest of the team for all the amazing work put into this disk, a round of applause to all of you for making it possible, and for keeping the Amiga alive! Enjoy the show - ",1,"Enjoy Amiga",0,"" 
     ; 900 characters left    
     dc.b ".....          ",$FF
     
@@ -3814,7 +3822,7 @@ TEXTLOADING8:
 
 
 TEXTMODULE8: ; 3600 characters available
-    dc.b "..... You are listening to FLY'N FALL by TEBIROD (4'33). Art by ORIENS..... Hi all, this is ORIENS at the keyboard. It has been a pleasure to code and create some graphics for this music disk. There are so many talented people involved. Thanks once again to LEONARD for sharing his LDOS system. This music disk is dedicated to my friend TEBIROD who passed away in June 2023. I had the privilege of working with him for 30 years, he was a truly remarkable person. The tune used in the intro is also his, and it has a special story. This module was initially created for the intro of our HAWK mega demo EARTH SORROWS in 1991. It was the first version for the intro. After reviewing all the artistic effects, I asked TEBIROD if he could improve the module, and he crafted a (perfect) second version for the mega demo. This first module had been left unused until today. I'm glad to finally be able to use it. The FLY'N FALL module is also an unused piece from TEBIROD. I truly adore this song, it's a perfect choice to conclude this music disk. ORIENS signing off."
+    dc.b "..... You are listening to ",1,"FLY'N FALL",0," by ",1,"TEBIROD",0," (4'33). Art by ",1,"ORIENS & WILL",0,"..... Hi all, this is ",1,"ORIENS",0," at the keyboard. It has been a pleasure to code and create some graphics for this music disk. There are so many talented people involved. Thanks once again to ",1,"LEONARD",0," for sharing his ",1,"LDOS",0," system. This music disk is dedicated to my friend ",1,"TEBIROD",0," who passed away in June 2023. I had the privilege of working with him for 30 years, he was a truly remarkable person. The tune used in the intro is also his, and it has a special story. This module was initially created for the intro of our ",1,"HAWK mega demo EARTH SORROWS",0," in 1991. It was the first version for the intro. After reviewing all the artistic effects, I asked ",1,"TEBIROD",0," if he could improve the module, and he crafted a (perfect) second version for the mega demo. This first module had been left unused until today. I'm glad to finally be able to use it. The ",1,"FLY'N FALL",0," module is also an unused piece from ",1,"TEBIROD",0,". I truly adore this song, it's a perfect choice to conclude this music disk. ",1,"ORIENS",0," signing off."
     ; 2500 characters left.
     dc.b ".....          ",$FF
     
@@ -3910,6 +3918,12 @@ SCROLLBASEHEIGHT=13 ; g and y are a bit cut
     bne .nospace
     add.w #3,d0 ; add more value to space character
 .nospace  
+    ; Apostrophe ?
+    cmp.b #"'",d2
+    bne .noapostrophe
+    add.w #3,d0 ; add more value to apostrophe character
+.noapostrophe 
+
 	add.w d0,Scroll1NextLetter ; Number of pixels to wait before displaying next letter
 
     ; End of scrolling ?

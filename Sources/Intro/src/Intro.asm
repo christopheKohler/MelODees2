@@ -235,7 +235,12 @@ InterruptLevel3:
     ;bsr BackgroundAnimation_TriggerFrontAnim
     bsr BackgroundAnimation_TriggerBackAnim
     ;add.b #1,$100
-.notrigger     
+.notrigger   
+
+    cmp.w #0,LogoRSEFlash
+    beq .noLogoRSEFlash
+    bsr FX1_DoRSEFlash
+.noLogoRSEFlash:  
     
     movem.l	(a7)+,d0-a6
 
@@ -662,8 +667,6 @@ Fx1_Init:
     bsr initPalette
 	bsr DoScreenSet ; set bitplans  
 
-
-    
     rts
 
 ; --------------------------------------------------------	
@@ -700,10 +703,8 @@ Fx1_Irq:
 	cmp.b #1,ScreenAskSwap
 	bne 	noswap
     bsr DoScreenSet
-	;move.w #$0f00,$dff180
-	;add.b #1,$100
-	;move.w #$0000,$dff180
 noswap:
+
     rts
 
 ; Copy logo to screen, using a mask not to erase what is below  
@@ -760,7 +761,11 @@ Fx1_CopySmallLogo:
 ; Copy displayed buffer to the 2 others.
 ; IT have been asked so do it once
 ; 1 2 3 each part of the screen. 96 pixels.
+; Copy from logo LogoRSE: ; 96*3 x 77 .... Incbin "data/LogoRSE.ami"
+; Copy to 3 display buffer ScreenDisplayed ScreenWork ScreenWorkNext       
 Fx1_CopyBuffers:
+    ;move.w AskForCopyLetter,$100
+
     move.l #2,d0 ; Start offset
     cmp.w #2,AskForCopyLetter
     bne .no2
@@ -768,8 +773,12 @@ Fx1_CopyBuffers:
 .no2
     cmp.w #3,AskForCopyLetter
     bne .no3
-    add.l #96/8,d0
+    add.l #96/8*2,d0
+    move.w #2,StepCurrent ; Ask for next GFX
 .no3
+
+    bsr Fx1_CopyLogoToScreenDisplayed ; Copy the logo nice letter to display buffer
+
 	;move.l ScreenDisplayed,a0
 	;move.l ScreenWork,a1
 	;move.l ScreenWorkNext,a2
@@ -787,7 +796,7 @@ Fx1_CopyBuffers:
     add.l #40-(96/8),a0
     add.l #40-(96/8),a1
     dbra d1,.loop1
-    ; Copy to thirf buffer
+    ; Copy to third buffer
     move.l ScreenDisplayed,a0 ; Source
     add.l d0,a0
     move.l ScreenWorkNext,a1
@@ -801,9 +810,109 @@ Fx1_CopyBuffers:
     add.l #40-(96/8),a0
     add.l #40-(96/8),a1
     dbra d1,.loop2
-
-    move.w #0,AskForCopyLetter
+    
+    cmp.w #3,AskForCopyLetter
+    bne .nolastletter
+    ; Copy small logo is was the last letter
+    lea screen1,a3
+    bsr Fx1_CopySmallLogo
+    lea screen2,a3
+    bsr Fx1_CopySmallLogo
+    lea screen3,a3
+    bsr Fx1_CopySmallLogo     
+.nolastletter:
+    move.w #0,AskForCopyLetter ; Reset the request
     rts
+    
+Fx1_CopyLogoToScreenDisplayed:
+    move.w #5,LogoRSEFlash ; Ask Flash white to palette, very quick
+
+    lea LogoRSE+26,a0 ; Source
+    add.l d0,a0 ; offset 
+    sub.l #2,a0 ; need to remove the 16 pixels of screen offset
+    move.l a0,a1
+    add.l #36*77,a1 ; Plane 2
+    move.l a1,a2
+    add.l #36*77,a2 ; Plane 3
+    ; Dest
+    move.l ScreenDisplayed,a3 ; Dest plane 1
+    add.l #5*40,a3 ; The Logo RSE picture is smaller than the 87 pixel zone
+    add.l d0,a3
+    move.l a3,a4
+    add.l #40*87,a4 ; plane 2
+    move.l a4,a5
+    add.l #40*87,a5 ; plane 3
+    ; Copy 3 planes. 77 lines
+    move.w #77-1,d1
+.loop1
+    move.l (a0)+,(a3)+ ; 32 pixels
+    move.l (a1)+,(a4)+
+    move.l (a2)+,(a5)+
+    move.l (a0)+,(a3)+ ; 32 pixels
+    move.l (a1)+,(a4)+
+    move.l (a2)+,(a5)+
+    move.l (a0)+,(a3)+ ; 32 pixels
+    move.l (a1)+,(a4)+
+    move.l (a2)+,(a5)+    
+    add.l #36-12,a0
+    add.l #36-12,a1
+    add.l #36-12,a2
+    add.l #40-(96/8),a3
+    add.l #40-(96/8),a4
+    add.l #40-(96/8),a5
+    dbra d1,.loop1
+    rts
+    
+LogoRSEFlash:
+    dc.w    0 ; 0 inactive.
+    
+FX1_DoRSEFlash:
+    ; LogoRSEFlash can be 5 4 3 2 1
+    cmp.w #5,LogoRSEFlash
+    bne .no5
+    lea Pal5,a0
+    bsr FX1_CopyRSEPal
+    bra .end
+.no5
+    cmp.w #4,LogoRSEFlash
+    bne .no4
+    lea Pal4,a0
+    bsr FX1_CopyRSEPal
+    bra .end
+.no4     
+    cmp.w #3,LogoRSEFlash
+    bne .no3
+    lea Pal3,a0
+    bsr FX1_CopyRSEPal
+    bra .end
+.no3
+    cmp.w #2,LogoRSEFlash
+    bne .no2
+    lea Pal2,a0
+    bsr FX1_CopyRSEPal
+    bra .end
+.no2  
+    lea Pal1,a0
+    bsr FX1_CopyRSEPal
+.end
+    sub.w #1,LogoRSEFlash
+    rts
+; A0 color 1 to 8
+FX1_CopyRSEPal:
+    lea copPal+4+2,a1 ; point to color 1 (ignore 0)
+    move.w #7-1,d0
+.copy:
+    move.w (a0)+,(a1)+
+    add.l #2,a1
+    dbra d0,.copy
+    rts
+
+Pal5:    dc.w    $fff,$fff,$fff,$fff,$fff,$fff,$fff
+Pal4:    dc.w    $bbb,$bbc,$eee,$eee,$eee,$eef,$fff
+Pal3:    dc.w    $888,$99a,$ccd,$ccd,$dde,$ddf,$fef
+Pal2:    dc.w    $444,$666,$aac,$aac,$ccd,$ccf,$fef
+Pal1:    dc.w    $112,$445,$88B,$99B,$BAD,$CBF,$FEF
+    
 
 Fx1_Loop:
 
@@ -1285,16 +1394,17 @@ Init_Object3d:
 	add.l d1,a1
 	add.l #4,a1 ; End marker	
 	move.l a1,P_Palette ; Save pointer to Palette 
-	add.l #16,a1
+	add.l #16,a1 ; 8 colors
 	move.l a1,P_ColorBlend  ; Save pointer to ColorBlend 
 	rts
 initPalette:
 	move.l P_Palette,a0
+    add.l #2,a0 ; Skip first color
     ;move.w 6(a0),$100
     ;move.w 14(a0),$102
 	lea copPal+4,a1
 	add.l #2,a1 ;
-	move.w #8-1,d0
+	move.w #7-1,d0
 .initPaletteloop
 	move.w (a0)+,(a1)
 	add.l #4,a1
@@ -1377,15 +1487,8 @@ SPEED3D=17
     cmp.l #Obj3d_E,P_Obj3d
     bne .wasnotE
     move.w #3,AskForCopyLetter ; Letter S will be copied to all buffers
-    ; Copy resistance small logo
-    lea screen1,a3
-    bsr Fx1_CopySmallLogo
-    lea screen2,a3
-    bsr Fx1_CopySmallLogo
-    lea screen3,a3
-    bsr Fx1_CopySmallLogo       
-    
-    move.w #2,StepCurrent ; Ask for next GFX
+    ; Copy resistance small logo when letter is last one
+    ; Ask for next GFX after call AskCopyLetter
 .wasnotE: 
  
 .copyvaluestotable:
@@ -1785,15 +1888,9 @@ fillbob:
 ; $dff044=-1 (longword)
 ;---------------------------------------------------------- 
 drawline:
-	movem.l	d0-d5/a0-a5,-(a7)
+	movem.l	d0-d6/a0-a5,-(a7)
 	lea	$dff000,a5
 	
-	;bsr waitblitter
-
-	move.w	24(a0),d5 ; Screen width (bytes)
-	move.w	d5,bltcmod(a5)
-	move.l	#-$8000,bltbdat(a5)
-	move.l	#-1,bltafwm(a5)
 	move.l	#bobzone,a1
 	
 	cmp.w	d0,d2
@@ -1840,6 +1937,11 @@ line4:	addx.w	d5,d5
 	or.w	#$a4a,d0
 
 	bsr waitblitter
+
+	move.w	24(a0),d6 ; Screen width (bytes)
+	move.w	d6,bltcmod(a5)
+	move.l	#-$8000,bltbdat(a5)
+	move.l	#-1,bltafwm(a5)    
 	
 	move.w	d2,bltaptl(a5)
 	sub.w	d3,d2
@@ -1853,7 +1955,7 @@ line4:	addx.w	d5,d5
 	move.w	d3,bltsize(a5)
 out_line:
 out_fill:
-	movem.l	(a7)+,d0-d5/a0-a5
+	movem.l	(a7)+,d0-d6/a0-a5
 	rts
     
     CNOP 0,4
@@ -3602,7 +3704,7 @@ Logo: ; 16 colors, 320x64
 LogoSmall: ; 8 colors, same as 3D. 288x11 pixels
         Incbin	"data/LogoSmall.ami"
 
-LogoRSE:
+LogoRSE: ; 96*3 x 77
         Incbin "data/LogoRSE.ami"
         
         blk.b 40*1,$F5 ; Padding data , overwritted by LDOS system ?

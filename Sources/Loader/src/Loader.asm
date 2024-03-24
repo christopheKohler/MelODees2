@@ -202,8 +202,8 @@ evolveAllVolutes:
 	beq .next
 	movem.l d0-d1/a0,-(sp)
 	bsr evolveVolute ; a0 is volute
-    add.w #1,d1
 	movem.l (sp)+,d0-d1/a0
+    add.w #1,d1
 .next:
 	; try next one
 	add.w #1,d0
