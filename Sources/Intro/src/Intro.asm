@@ -622,12 +622,12 @@ BackgroundAnimation_SwitchToBrightPalette:
     rts
 
 erasebackscreen:
+    ; Erase HALF of the screen. Right part, we do not need to erase the other half
+	move.l SCR3,a0
+    add.l #20,a0    
     bsr waitblitter ; Wait blitter to be ready
-    ; Erase 40 byte, with 256 lines with blitter
 	move.w #20,$dff066			;destination modulo
 	move.l #$01000000,$dff040	;set operation type in BLTCON0/1
-	move.l SCR3,a0
-    add.l #20,a0
     move.l a0,$dff054   ;destination address
 	move.w #(SCREENH*64)+(LINE_PITCH/2/2),$dff058 ;blitter operation size    
     rts
@@ -1500,26 +1500,6 @@ SPEED3D=17
 .end: 
 	rts
 
-	; d0 depth
-;ComputeDitheringFromDepth:
-	; Global dithering
-	; 400 (near), 800 far
-	; 500=75% 600=50% 700=25%
-	;move.w #0,color256 ; No dither
-;	cmp.w #520,d0
-;	blt .no1
-;	move.w #3,color256 ; 3=75%
-;.no1:
-;	cmp.w #600,d0
-;	blt .no2
-;	move.w #2,color256 ; 2=50%
-;.no2
-;	cmp.w #700,d0
-;	blt .no3
-;	move.w #1,color256 ; 1=25%
-;.no3
-;	rts
-
 ;----------------------------------------------------------------
 ; 3D Coordinates:
 ; X positive Right	
@@ -1576,8 +1556,6 @@ bpl=(w/16)*2				;byte-width of 1 bitplane line
 bwid=bpls*bpl			;byte-width of 1 pixel line (all bpls)
 Plot:					;d1=x, d2=y, d3=color, a1=screen
 	movem.l d1-d5/a1,-(sp)
-	;add.w ObjX,d1		;Add position of the amazing
-	;add.w ObjY,d2		;secret dot object!
 	muls #bwid,d2			;Address offset for line
 	move.w d1,d4			;left-to-right x position,
 	not.w d4			;to bit 7-0 (other bits unused by bset)
@@ -2760,7 +2738,8 @@ Fx3_Init:
 	move.l #$01000000,$dff040	;set operation type in BLTCON0/1
 	move.l #BufferChips,a0
     move.l a0,$dff054   ;destination address
-	move.w #(SCREENH*4*64)+(40/2),$dff058 ;blitter operation size   
+	move.w #(SCREENH*4*64)+(LINE_PITCH/2),$dff058 ; blitter operation size. Triple buffer + scrolling plane
+    bsr waitblitter ; Wait end of clean operation.  
     
     ;bsr BackgroundAnimation_TriggerBackAnim
     bsr triplebufferswap
@@ -2783,28 +2762,33 @@ Fx3_Init:
 .erase
     move.w #0,(a0)+
     dbra d0,.erase
-
     rts
 
-
+; -------------------------------------------------------------------------------
 Fx3_Loop:
+    bsr waitblitter ; Be sure that erase is finished (for faster machines)
+    bsr triplebufferswap
     bsr erasebackscreen ; SCR3
-    bsr Fx3_drawletter
+    bsr Fx3_drawletter ; This can take 1, 2, 3 frames depending on machine speed
 .testVBL 
-    cmp.w #2,VBLCount
+    cmp.w #2,VBLCount ; Some machine already have 2 VBL when coming here (some have 3).
     bge .ok
     bsr pollVSync
     bra .testVBL
 .ok:
-    bsr triplebufferswap
     move.w #0,VBLCount ; Reset VBL count.
     rts
-
+    
+; -------------------------------------------------------------------------------
 Fx3_Irq:
     bsr Fx3_DoScroll ; Need to be done after scroll display.
-    rts    
+    cmp.w #0,forceWait
+    beq .notinuse
+    sub.w #1,forceWait ; Decrease this counter here, so it is constant
+.notinuse:    
+    rts   
     
-
+; -------------------------------------------------------------------------------
 Fx3_DoScroll:
     add.w #1,scrollcount
     bsr waitblitter ; Wait blitter to be ready
@@ -2867,9 +2851,6 @@ LettersSequence:
     dc.l 0
     dc.l 0
     dc.l 0
-    dc.l 0
-    dc.l 0
-    dc.l 0
         
     dc.l $ffffffff
   
@@ -2884,9 +2865,11 @@ SCROLLMINI = 58 ; // Minimum pixels before drawing next letter (for faster machi
 Fx3_drawletter:
 
     ; For space, need to wait some time before next letter.
+    ; The counter decrease is done in IRQ, so time is constant on fast machines.
+    ;move.w forceWait,$100
     cmp.w #0,forceWait
     beq .nowait
-    sub.w #1,forceWait
+    ;sub.w #1,forceWait ; Done in IRQ
     rts
 .nowait:
     ; If draw steps is over
@@ -2971,7 +2954,7 @@ drawletter_noend:
     ; Test Space
     cmp.l #$0,(a0)
     bne drawletter_end2
-    move.w #NBSTEPS/2,forceWait ; Wait a bit to create space
+    move.w #SCROLLMINI-15,forceWait ; Wait a bit to create space
     add.l #4,currentletter
     ;bra drawletter_end2
 drawletter_end2:
@@ -3839,55 +3822,6 @@ PresentPAL:
                 dc.l	((PRESENTLINESTART+27)<<24)|($09fffe),$01820669 
                 dc.l	((PRESENTLINESTART+28)<<24)|($09fffe),$01820fff 
                 ; End 27
-                
-                ;dc.l	(PRESENTLINESTART<<24)|($09fffe)    ,$0182099c ; Line 1
-                ;dc.l	((PRESENTLINESTART+1)<<24)|($09fffe),$0182099c
-                ;dc.l	((PRESENTLINESTART+2)<<24)|($09fffe),$01820aad
-                ;dc.l	((PRESENTLINESTART+3)<<24)|($09fffe),$01820ccf ; Highlight
-                ;dc.l	((PRESENTLINESTART+4)<<24)|($09fffe),$01820aad 
-                ;dc.l	((PRESENTLINESTART+5)<<24)|($09fffe),$0182077a
-                ;dc.l	((PRESENTLINESTART+6)<<24)|($09fffe),$0182077a
-                ;dc.l	((PRESENTLINESTART+7)<<24)|($09fffe),$0182077a
-                ;dc.l	((PRESENTLINESTART+8)<<24)|($09fffe),$01820aad
-                ;dc.l	((PRESENTLINESTART+9)<<24)|($09fffe),$01820ccf ; Highlight
-                ;dc.l	((PRESENTLINESTART+10)<<24)|($09fffe),$01820aad 
-                ;dc.l	((PRESENTLINESTART+11)<<24)|($09fffe),$0182088b 
-                ;dc.l	((PRESENTLINESTART+12)<<24)|($09fffe),$0182077a 
-                ;dc.l	((PRESENTLINESTART+13)<<24)|($09fffe),$0182088b 
-                ;dc.l	((PRESENTLINESTART+14)<<24)|($09fffe),$0182099c 
-                ;dc.l	((PRESENTLINESTART+15)<<24)|($09fffe),$0182077a 
-                ;dc.l	((PRESENTLINESTART+16)<<24)|($09fffe),$0182077a 
-                ;dc.l	((PRESENTLINESTART+17)<<24)|($09fffe),$0182077a 
-                ;dc.l	((PRESENTLINESTART+18)<<24)|($09fffe),$01820aad 
-                ;dc.l	((PRESENTLINESTART+19)<<24)|($09fffe),$01820ccf ; Highlight
-                ;dc.l	((PRESENTLINESTART+20)<<24)|($09fffe),$01820aad
-                ;dc.l	((PRESENTLINESTART+21)<<24)|($09fffe),$0182088b                
-                ;dc.l	((PRESENTLINESTART+22)<<24)|($09fffe),$0182077a 
-                ;dc.l	((PRESENTLINESTART+23)<<24)|($09fffe),$0182099c 
-                ;dc.l	((PRESENTLINESTART+24)<<24)|($09fffe),$0182099c 
-                ;dc.l	((PRESENTLINESTART+25)<<24)|($09fffe),$0182088b 
-                ;dc.l	((PRESENTLINESTART+26)<<24)|($09fffe),$0182099c 
-                ;dc.l	((PRESENTLINESTART+27)<<24)|($09fffe),$0182077a                
-                
-                
-                ; Center scroll 
-                ;dc.l	(($28+84+21)<<24)|($09fffe),$01820F00
-                ;dc.l	(($28+84+22)<<24)|($09fffe),$01840666
-                ;dc.l	(($28+84+23)<<24)|($09fffe),$01840888
-                ;dc.l	(($28+84+24)<<24)|($09fffe),$01840aaa
-                ;dc.l	(($28+84+25)<<24)|($09fffe),$01840ccc
-                ;dc.l	(($28+84+26)<<24)|($09fffe),$01840ddd ; max color
-                ; 
-                ;dc.l	(($28+84+21+41+1)<<24)|($09fffe),$01840ccc
-                ;dc.l	(($28+84+21+41+2)<<24)|($09fffe),$01840aaa
-                ;dc.l	(($28+84+21+41+3)<<24)|($09fffe),$01840888
-                ;dc.l	(($28+84+21+41+4)<<24)|($09fffe),$01840666
-                ;dc.l	(($28+84+21+41+5)<<24)|($09fffe),$01840444
-                ;dc.l	(($28+84+21+41+6)<<24)|($09fffe),$01840222                
-                ; End center scroll
-                ;dc.l	(($28+84+21+41+7)<<24)|($09fffe),$01820aaa ; Rotating letter
-                ;dc.l	(($28+84+21+41+9)<<24)|($09fffe),$01820888 
-                ;dc.l	(($28+84+21+41+11)<<24)|($09fffe),$01820444
 
 ZONE6b_BLACK:    dc.l	(($28+ZONE7+CENTRALZONE)<<24)|($09fffe),$01800000      
 ZONE6b_PAL:      dc.l	(($28+ZONE7+CENTRALZONE+1)<<24)|($09fffe),$01800000 
@@ -4180,7 +4114,6 @@ SpriteLine2:
 ; ----------------------------------------     
         
         bss_f
-
 
 ; ----------------------------------------
 ; Chip mem

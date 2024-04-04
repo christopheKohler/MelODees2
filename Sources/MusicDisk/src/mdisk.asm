@@ -1,6 +1,6 @@
 ;----------------------------------------------------------------
 ; Music disk 2
-; Resistance 2022
+; Resistance 2022-2024
 ;
 ; Logo 64 pixels 32 colors
 ; Background 112 pixels
@@ -9,16 +9,16 @@
 ;
 ; WinUAE special version, display memory place from $100 (4 words/8bytes) up to $107.
 ;
-; Oriens 2022-2023
+; Oriens 2022-2024
 ; -------------------------------------------------------
-
+; Tracks and data :
 ; 00 Tebirod-Earth_sorrow_alt.p61
 ; 01 Intro/Intro.bin
 ; 02 Empty/Empty.bin
 ; 03 MusicDisk/mdisk.bin
-; 04 mA2E-Limitless_Delights.p61  .... id=1 .... 2+id*2
+; 04 mA2E-Limitless_Delights.p61  .... Track id=1 .... 2+id*2 (currentmusic)
 ; 05 datas/Level5.bin             .... id=1 .... 3+id*2
-; AceMan-Hi-school_Girls.p61 ; 2
+; AceMan-Hi-school_Girls.p61 ; Track 2
 ; datas/Level7.bin
 ; Nainnain-Izar.p61 ; 3
 ; datas/Level3.bin
@@ -32,7 +32,6 @@
 ; datas/Level4.bin
 ; Tebirod-Flyn_fall_opt.p61 ; 8
 ; datas/Level6.bin
-;
 ;
 ; Debug colors:
 ; color 2 = grey (for free) then 3 to 10 for each label
@@ -51,19 +50,20 @@
 	jmp	startup
 	
 DISPLAYDEBUGMEMORY=0 ; 1 display memory  
-;NOINTRO=1 ; 1 = skip intro
-SHOWRASTER=0 
+SHOWRASTER=0 ; Show some info for blitter/cpu
 
-;ALTERNATETIME = 15*50 ; Switch palette each  
 ALTERNATETIME = 60*50 ; Switch palette each
-    
+;ALTERNATETIME = 15*50 ; Debug 
+;ALTERNATETIME = 35*50 
+ 
 ;----------------------------------------------------------------
-; 
+
 	include "../../LDOS/src/kernel.inc"
 
 	code_f
 	
 startup:
+
     bsr InitRandom
     
 	lea	$DFF000,A6	
@@ -79,23 +79,23 @@ startup:
     move.w #$0c00,$DFF106
     move.w #$0011,$DFF10C
     
-    ; Test chip ram.
+    ; Test chip ram. Do we have 512KB or 1MB ??
+    ; If enough chipram, then the second module (highschool girls) can fully load
 	move.l (LDOS_BASE).w,a6
-	jsr		LDOS_GETMEMBLOCKTABLE(a6) ; d0 = chip, d1 = fast   
+	jsr		LDOS_GETMEMBLOCKTABLE(a6) ; d0 = chip, d1 = fast/fake   
     move.l d0,a0 ; Get table of chip mem. 256 blocks = 512*2 mem, else 128 blocks = 512 Ko
-    cmp.b #$7f,255(a0) ; MEMLABEL_SYSTEM
+    cmp.b #$7f,255(a0) ; MEMLABEL_SYSTEM, means no memory available (set in LDOS core)
     beq .noextrachip
     move.w #1,haveenoughchip ; Tell the music disk that there are plenty of chip mem :)
 .noextrachip: 
- 
-    
+
     bsr AllocateChipMemForParalax ; Allocate 90K at end of chip mem
     
     ; -- Loading first module (same code as in DoLoading !)
     move.w #1,currentmusic ; Start with first module
-    ;move.w #3,currentmusic ; Plane
-    ;move.w #6,currentmusic ; Butterfly
-    ;move.w #7,currentmusic ; SnC city futurist
+    ;move.w #3,currentmusic ; Debug Plane
+    ;move.w #6,currentmusic ; Debug Butterfly
+    ;move.w #7,currentmusic ; Debug SnC city futurist
 	; Preload music
 	move.l (LDOS_BASE).w,a6
 	move.w currentmusic,d0 ; 1 to 8
@@ -146,11 +146,11 @@ startup:
     move.w #50*3,d0 ; 3 seconds
     jsr waitxxFrames ; Wait xx second    
     
-BigLoop: ; ------------------------------------------------------
+    ; ------------------------------------------------------
+BigLoop: ; Main loop CPU
+
     bsr wait1Frame
     bsr UpdateDisplayMusicName ; CPU Display names (can be slow so here in cpu loop)   
-
-    move.l #1,a6
 
     ; -- Check first scrolltext force
     cmp.b #1,first_launch ; first music counter
@@ -173,8 +173,6 @@ BigLoop: ; ------------------------------------------------------
     add.l d0,a0
     move.l (a0),a0 
     move.l a0,Scroll1Pointer
-
-    
 .nofirst:    
 
     cmp.w #1,request_loading ; user have request a loading, we wait for "loading" to be there to do the effective load
@@ -207,7 +205,6 @@ BigLoop: ; ------------------------------------------------------
     ; ----- BIG LOOP END -------------------------------------------
    
 MouseClicTest:
-    ;add.b #1,$100 ; DEBUG
 
     ; If here, module is not loading.
     cmp.b #1,gui_flag_mouse_on_next
@@ -232,8 +229,6 @@ NBMODULES=8
 NextClicked:
     bsr InitCursorMouseWait
     
-    ;move.l #2,a6
-    
     move.b #0,first_launch ; first music counter
     
     clr.l d0
@@ -248,14 +243,11 @@ NextClicked:
     bne .nomoduleoverflow
     move.w #1,currentmusic ; reset to first module
 .nomoduleoverflow:  
-
-    ;move.l #3,a6
     
     cmp.w #1,currentmusic
     bne .no1
     bsr switchtext1 ; random choose text1
 .no1:
-    
 
     move.b #GUITILEPRESSEDON,gui_count_next_justclicked
     ; Display "on" icon
@@ -268,8 +260,6 @@ NextClicked:
     bsr GetPlayPauseIconDataInA0
     move.l #0,d0 ; style 0=off 1=on 2=rollover
     bsr DisplayGuiIcon 
-
-    ;move.l #4,a6    
 
     move.w #1,request_loading
     move.b #1,flag_module_is_loading
@@ -321,21 +311,16 @@ PrevClicked:
 
     ;---------------------------------------------------------------
 Do_Loading: ; this is blocking, done when "loading" is fully displayed
-    move.l #5,a6
     bsr LoadingModule
-    move.l #6,a6
 Do_Loading_PostProcess: ; Can be called directly after load of first module 
     move.w #0,music_last_pattern_pos
     clr.l d0
     move.w currentmusic,d0
     bsr RequestDisplayMusicName
-    move.l #7,a6
     bsr InitCursorMouse
     bsr FadeInGradientTransition ; first transition black to palette
     bsr SpriteCentral_AskComeFromLeft ; Ask ain sprite to arrive from left
-    move.l #8,a6
     rts
-    
     ; ---------------------------------------------
     
     ; -- Mode clicked
@@ -379,7 +364,6 @@ switchtext1:
     ; random choose for text1, order vary.
     lea TEXTSCROLLSTABLE,a0
     bsr GetRandom ; d0.w
-    ;move.w d0,$100
     
     move.l #TEXTMODULE1,(a0)
     
@@ -387,7 +371,6 @@ switchtext1:
     bpl .nochange
     move.l #TEXTMODULE1ALT,(a0)
 .nochange: 
-    
     rts
 
 ;-----------------------------------------------------------------------
@@ -481,12 +464,6 @@ FreeChipMemForParalax:
     move.w d0,2(a1)
     move.w d0,2(a2)
     move.w d0,2(a3)
-    ; Erase first planes.
-;    move.l ParalaxDoubleBuffer,a0
-;    move.w #((40/4)*43)-1,d1
-;.clear
-;    move.l #0,(a0)+
-;    dbra d1,.clear
     rts  
 ; ------------------------------------------------------------------------------- 
 
@@ -656,7 +633,6 @@ wait1Frame:
 ; -- Loading and playing module
 ; currentmusic 1 to 8 .... 2 is the big one, need to free chipmem
 LoadingModule:
-	;move.b #$22,$107 ; Debug
     
     cmp.b #1,flag_do_not_change_scroll
     beq .noscrollchange
@@ -677,26 +653,7 @@ LoadingModule:
     move.b #1,ScrollIsSpecificText ; Set we are playing now specific text
 .nospecific  
     move.l a0,ScrollTextChangeRequest ; Will be set to Scroll1Pointer at next IRQ
-    ;move.l a0,Scroll1Pointer     ; Set loading text
-    ;move.w #0,DisplayColors
-    
-;    lea TEXTLOADING,a0
-;    clr.l d0
-;    move.w currentmusic,d0 ; 1 to 8
-;    sub.w #1,d0
-;    lsl #2,d0 ; *4
-;    add.l d0,a0
-;    move.l (a0),a0 ; a0 contain start of specific loading text
-;    ; If not specific text playing, save main text position
-;    cmp.b #0,ScrollIsSpecificText
-;    bne .nospecific2
-;    move.l Scroll1Pointer,a1 ; main text
-;    move.l a1,ScrollMainTextSave ; Save main text
-;    move.b #1,ScrollIsSpecificText ; Set wer are playing now specific text
-;.nospecific2:    
-;    move.l a0,Scroll1Pointer 
-;    move.w #0,DisplayColors
-
+ 
 .noscrollchange
 	
     ; -- If big module (2), free memory of paralax and stop music
@@ -712,8 +669,6 @@ LoadingModule:
     bsr EraseParalaxBackground
     bsr FreeChipMemForParalax
     bsr LaunchGradientTransition ; ask palette transition
-    ;move.w #100,d0 ; 2 seconds (for fade and stop)
-    ;jsr waitxxFrames ; Wait xx second    
     ; Free memory of music
 	move.l (LDOS_BASE).w,a6
 	jsr		LDOS_FREE_MEM_MUSIC(a6)  ; Stop with fade
@@ -756,8 +711,6 @@ LoadingModule:
 
     move.w #150,d0 ; 3 seconds
     jsr waitxxFrames ; Wait xx second
-	
-    ;move.b #$11,$101 ; Debug
     
 	; install music
 	move.l (LDOS_BASE).w,a6
@@ -768,12 +721,8 @@ LoadingModule:
     jsr waitxxFrames ; Wait xx second
 	move.w	#%0000000000001111,$dff096 ; Turn off Audio Dma. 4 Channels
 
-	;move.b #$22,$101 ; Debug
-
 	move.l (LDOS_BASE).w,a6
 	jsr		LDOS_MUSIC_START(a6)
-    
-    ;move.b #$33,$101 ; Debug
     
     move.b #0,flag_module_is_loading
     
@@ -797,8 +746,6 @@ LoadingModule:
     move.l a0,ScrollTextChangeRequest
     ;move.w #0,DisplayColors    
 .noscrollchange2
-
-    ;move.b #$44,$101 ; Debug
     
     ; -- Here need to wait that fade is over.
 .waitfadegradientend:
@@ -814,8 +761,6 @@ LoadingModule:
     ; TODO Check this
     move.l	(LDOS_BASE).w,a6
     jsr		LDOS_FREE_MEM_DATA(a6) 
-
-    ;move.b #$66,$101 ; Debug
     
     ; LoadedLevel destination
     ; First level is file 4.
@@ -828,8 +773,6 @@ LoadingModule:
 	jsr LDOS_DATA_LOAD(a6) ; Alloc Fast mem (TAG DATA). Blocking function. d0.l = adress, d1.l = size   
     move.l d0,LoadedLevel
     
-    ;move.b #$77,$101 ; Debug
-    
     ; If big module (2), then realloc mem for paralax
     cmp.w #1,haveenoughchip
     beq .nobigmodule2
@@ -838,8 +781,6 @@ LoadingModule:
     bne .nobigmodule2
     bsr AllocateChipMemForParalax ; Realloc
 .nobigmodule2:  
-
-    ;move.b #$88,$101 ; Debug
 
     ; -- Construct graphic data from loaded level data.
     move.w #1,SpriteStopUpdate
@@ -1610,10 +1551,6 @@ Front_Bottom:
     move.b (a0)+,(a1)+
     dbra d0,.loop2
 
-
-    ;cmp.w #1,currentmusic ; Debug
-    ;bne .debugnosprite
-
     ; Sprite - Init motion
     Bsr InitMotion
 
@@ -1764,11 +1701,8 @@ OFFSETNullSpritePtr=11*4;
     bra .endallsprite
 .nomusic6:
 
-
-
 .endallsprite:
-
-.debugnosprite
+.debugnosprite:
     rts
 
 PlaneSwitchAnim:
@@ -2422,8 +2356,6 @@ SpriteAnimationResetTable:
 AnimateSprite:
     lea SpriteFrameTableTimer+1,a0
     add.b #1,(a0)
-    ;move.w SpriteFrameTableTimer,$102
-    ;move.l #SpriteFrameTableTimer,$104
     move.w SpriteAnimSpeed,d0 ; 5 default
     cmp.w SpriteFrameTableTimer,d0
     bne .Animate_End
@@ -2687,61 +2619,31 @@ DisplayMusicNameWithPattern_sliceloop:
     move.l a1,a4; Dest
     move.l a2,a5; Pattern
     
-    ; -- First erase slice, so no bitplan decay could appear.
-;    movem.l a0-a5,-(a7)
-;    move.l a1,a2
-;    add.l #40*64,a2
-;    move.l a2,a3
-;    add.l #40*64,a3  
-;    move.l a3,a4
-;    add.l #40*64,a4 
-;    move.l a4,a5
-;    add.l #40*64,a5     
-;    
-;    move.l #16-1,d4
-;.lineserase
-;    ; Copy 16 lines
-;    move.b #0,(a1)
-;    move.b #0,(a2)
-;    move.b #0,(a3)
-;    move.b #0,(a4)
-;    move.b #0,(a5)
-;    add.l #40,a1
-;    add.l #40,a2
-;    add.l #40,a3
-;    add.l #40,a4
-;    add.l #40,a5
-;
-;    dbra d4,.lineserase
-;    movem.l (a7)+,a0-a5
-   
-    
-    
     move.l #5-1,d5 ; -- 5 planes
 .planes
-        move.l #16-1,d4
+    move.l #16-1,d4
 .lines
-            ; Copy 16 lines
-            move.b (a3),d3
-            and.b (a5),d3 ; Apply mask
-            move.b d3,(a4)
-            
-            add.l #25,a3 ; next line source
-            add.l #40,a4 ; next line dest
-            add.l #8,a5 ; Next mask line
+    ; Copy 16 lines
+    move.b (a3),d3
+    and.b (a5),d3 ; Apply mask
+    move.b d3,(a4)
 
-        dbra d4,.lines
+    add.l #25,a3 ; next line source
+    add.l #40,a4 ; next line dest
+    add.l #8,a5 ; Next mask line
 
-        ; Next plan
-        add.l #25*(NBMODULES+1)*16,a0 ; next plane source ( 9 titles of 16 lines) 25 bytes width
-        add.l #40*64,a1 ; next plane dest
-        move.l a0,a3 ; Src
-        move.l a1,a4 ; Dest    
-        move.l a2,a5 ; Pattern , reset pattern
+    dbra d4,.lines
+
+    ; Next plan
+    add.l #25*(NBMODULES+1)*16,a0 ; next plane source ( 9 titles of 16 lines) 25 bytes width
+    add.l #40*64,a1 ; next plane dest
+    move.l a0,a3 ; Src
+    move.l a1,a4 ; Dest    
+    move.l a2,a5 ; Pattern , reset pattern
     
     dbra d5,.planes ; 5 planes
 
-.nextslice
+.nextslice:
     
     add.l #1,d0  ; next slice position
 
@@ -3160,11 +3062,7 @@ UpdateMouseGuiFlags:
     lea gui_flag_mouse_on_mode,a0
     lea gui_coords_mode,a1
     bsr TestOnGuiFlag     
-    
-    ;move.b gui_flag_mouse_on_prev,$100 ; debug
-    ;move.b gui_flag_mouse_on_next,$101 ; debug
-    ;move.b gui_flag_mouse_on_play,$102 ; debug
-    ;move.b gui_flag_mouse_on_mode,$103 ; debug 
+
     rts
 
 ; -------------------------
@@ -3461,24 +3359,6 @@ UpdateBackgroundScroll:
 .noparalax1
 
     rts
-;---------------------------------------------------------------
-; DEBUG
-;In $100 (w)
-ComputeFreeChipMem:  
-	move.l (LDOS_BASE).w,a6
-	jsr		LDOS_GETMEMBLOCKTABLE(a6) ; d0 = chip, d1 = fast   
-    move.l d0,a0 ; Get table of chip mem
-    moveq #0,d1 ; NUmber of free Kb
-    move.l #128-1,d6 ; 128 blocks of 4K
-.loop:
-    move.b (a0)+,d5 ; get color to convert
-    cmp.b #0,d5
-    bne .endcolorremap
-    add.l #4,d1 ; 4KB free
-.endcolorremap
-    dbra d6,.loop
-    ;move.w d1,$100
-    rts
 
     if DISPLAYDEBUGMEMORY==1
 ;---------------------------------------------------------------
@@ -3638,13 +3518,15 @@ TEXTLOADING:
 ; Textes: 400 characters for 30 secondes. 800 for 1 minute. (approx)
 	
 TEXTMAIN:
-	dc.b "",1,"RESISTANCE",0,", back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK, & Tebirod.",0,"                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard/Oxygene",0,". Debug help by ",1,"StringRay",0,". P61 routine by ",1,"Photon/Scoopex",0,". Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: ",1,"Dissident, luNix, Ozzyboshi, Axi0maT, Optic, Gligli, Nytrik, Magnetic-Fox.",0,"          Greetings to: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene.",0,"                 "
+	dc.b "",1,"RESISTANCE",0,", back on the ",1,"Amiga",0," again, with a new A500 music disk. Released at the ",1,"REVISION",0," demoparty 2024, on the 31 of March 2024.                      Tunes by ",1,"AceMan, Koopa, mAZE, Nainain, Ok3an0s/TEK & Tebirod.",0,"                 Credits: Code by ",1,"Oriens",0," ... Arts by ",1,"Fra, Gr4ss666, Oriens, Rahow, SnC & Vectrex28",0," ... LDOS system by ",1,"Leonard/Oxygene",0,". Debug help by ",1,"StingRay",0,". P61 routine by ",1,"Photon/Scoopex",0,". Testing by ",1,"4Play & Sachy",0,". Hello to others Resistance members: ",1,"Dissident, luNix, Ozzyboshi, Axi0maT, Gligli, Nytrik, Magnetic-Fox.",0,"          Greetings to: ",1,"Desire, Focus Design, The Electronic Knights, Planet Jazz, Software Failure, Ephidrena, Insane, Abyss, Loonies, Wanted Team, Oxyron, Nah-Kolor, Lemon., Ghostown, Deadliners, Oxygene, Scarab.",0,"                 "
     dc.b "If you want to read the full text for each module, you can use the ",1,"LOOP",0," icon on the control interface.        "
     dc.b "Here are some technical details about that music disk. It is running on an Amiga 500 OCS with 1 MB of RAM. It should runs on most Amiga models and can be launched from a hard drive (execute hdd_loader.exe, while having the ADF file in the same directory). The total uncompressed data size of the modules is 1120 KB. If you only have 512 KB of chip RAM, It will need to stop the music and free the scrolling memory to load the second module, HI-SCHOOL GIRLS, which is 375 KB! Each module has a 32-color background. The total data on the disk, is 1600 KB once uncompressed. The music disk runs with a customized version of the LDOS track system by ",1,"LEONARD",0,". Thanks again to him for sharing.      "
     
     dc.b "If you enjoy this music disk, you should consider listening to the first opus, ",1,"Mel'O'Dees",0,", released in 2021. On PC, you can listen to ",1,"Marine Melodies",0," (2022). Also, try ",1,"SNES Music Pack 1",0," (2021). In any case, make sure to turn on your best hi-fi system to fully appreciate these great tunes. "
 
     dc.b "We are currently working on issue 3 of this series. If you want to ",1,"contribute",0,", either with a tune or design, feel free to ",1,"contact",0," us.         "
+    
+    ; RJ Mical text here ??
     
     dc.b "                                        ",$FF
   
@@ -3696,7 +3578,6 @@ TEXTMODULE2: ; Should allow 1900 characters
     
     dc.b "..... You are listening to ",1,"HI-SCHOOL GIRLS",0," by ",1,"ACEMAN",0," (2'23). Art by ",1,"RAHOW/REBELS",0,"..... Well hello there, here is ",1,"AceMan",0," at the keyboard. It is great pleasure to participate again in the second part of this noble music disc! Such fun to see what the graphic designers came up with while listening to my tunes :) So, about the tune. I made this one with the idea of jazz musician playing in the dirty night streets of the city or maybe some sleazy bar. I collected samples from all sorts of sources - I found chords and drums in some random packages, sax solos are chopped and mixed sequences from freesound.org. Everything was kept in lofi style (due to the memory limitations of the A500, but it also fits nice with the general idea). I was terribly missing some dialogue insert, so after a little research I chose Matthew McConaughey's quote from the movie 'Dazed and Confused' :) I hope you enjoy this piece. Cheers!"
     ; 800 characters left. (Rahow want only 1 text, I put on next one.)
-    
     dc.b ".....          ",$FF
     even
     
@@ -3717,7 +3598,6 @@ TEXTMODULE3: ; Should allow 2800 chracters
     ; 2400 left for RAHOW text.
     dc.b "",1,"RAHOW",0," at the kayboard now ... Thanx to ",1,"Oriens",0,", to have came in 2018 to involve me with the ",1,"The Fall",0," demo, you made me realise my dream to be in the winner prod of a big Amiga demo competition." 
     ; 2200 left here.    
-    
     dc.b ".....          ",$FF
     
     even
@@ -3737,9 +3617,8 @@ TEXTLOADING4:
 TEXTMODULE4: ; Should allow 1600 characters
     dc.b "..... You are listening to ",1,"STAR-STUDDED SKIES",0," by ",1,"OK3AN0S/TEK",0," (2'01). Art by ",1,"ORIENS",0,"..... This module was composed around the same time than 'adrift in space' which was composed in 2019. This one is a kind of sequel. It seems I like titles related to space and stars :) The whole module is constructed around the groovy bassline otherwise I have not much to say about this one so it's time for some greetings. First of all I'd like to thank ",1,"4play",0," and the whole ",1,"RESISTANCE",0," team for letting me participate to this musicdisk. I also want to greet all my friends around. They know who they are :p      "
     ; 900 characters left.
-    dc.b " ",1,"ORIENS",0," back at the keyboard. My next contribution to the Amiga scene will be a game named ",1,"Ninja Carnage",0,". I've developed it for 8-bit computers (Commodore 64 and Amstrad CPC). It has also been ported to the Spectrum by ",1,"Clive Townsend",0,". Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon. Stay tuned.               "
+    dc.b " ",1,"ORIENS",0," back at the keyboard. My next contribution to the Amiga scene will be a game named ",1,"Ninja Carnage",0,". I've developed it for 8-bit computers (Commodore 64 & Amstrad CPC). It has also been ported to the Spectrum by ",1,"Clive Townsend",0,". Currently, I'm working on porting it to the Amiga. It's a point-and-click, die-and-retry graphic adventure game. The display will be in HAM6 mode. I hope to release it soon. Stay tuned.               "
     ; 500 characters left.
-    
     dc.b ".....          ",$FF
     
     even
@@ -3757,10 +3636,35 @@ TEXTLOADING5:
     even
  
 TEXTMODULE5: ; 4000 characters available.
-    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ",1,"ST-XX",0," disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!"
+    dc.b "..... You are listening to ",1,"LE VOYAGE FANTASTIQUE",0," by ",1,"ACEMAN",0," (5'03). Art by ",1,"ORIENS",0,"..... Hi, here's ",1,"AceMan",0," again. So with this second piece it's like this: I wanted to go back a bit to the old Amiga days when people composed MODs using small samples ripped from synthesizers or ",1,"ST-XX",0," disks. The mood of the track was supposed to be electronic, melodic, Jarre-esque, sounding also like a game soundtrack. And I think it came out pretty well :) Enjoy!          "
     ; 3500 characters left.
-    ; RJ Mical text here ??
-    
+	dc.b "Hi there, ",1,"StingRay",0," at the keys. It has been a lot of fun helping "
+	dc.b "with this music disk. Oriens contacted me some days ago and "
+	dc.b "asked if I could help with some compatibility problems with "
+	dc.b "the music disk. I happily offered my help for several reasons: "
+	dc.b "I once was member of ",1,"RSE",0," and helping old friends is always a "
+	dc.b "pleasure. The other reason is that this way I could participate "
+	dc.b "in a Revision release without having one of my own. Real life "
+	dc.b "is really taking its toll these days, leaving almost no time "
+	dc.b "for Amiga stuff. When you have to manage a team of of several "
+	dc.b "SAP developers, you really do not feel like spending more time "
+	dc.b "coding outside of work. I am not complaining though, it's "
+	dc.b "interesting and challenging, it just doesn't leave much time "
+	dc.b "for scene stuff. Which is why I am glad that I could help with "
+	dc.b "this music disk release a bit. I am looking forward to working "
+	dc.b "together with Oriens again as it has been a very pleasant "
+	dc.b "experience. Greetings to all my old friends in RSE, everyone in "
+	dc.b 1,"Scarab",0,", everyone in ",1,"Scoopex",0," and everyone in ",1,"Fanatic2k",0," (special "
+	dc.b "greetings to ",1,"Nlk",0,", I am enjoying our conversations a lot!). "
+	dc.b "Everyone at Revision: ",1,"have a lot of fun",0,", due to other "
+	dc.b "commitments I will not be in Saarbruecken this year. I will "
+	dc.b "hopefully be back at Revision next year! Take care everyone and "
+	dc.b "have a lot of fun. Before leaving the keyboard, I want to "
+	dc.b "send some personal greetings to ",0,"Sensenstahl, 4play, Alpha One, "
+	dc.b "Galahad, Musashi5150, Britelite, Frequent, Slummy, Loaderror, "
+	dc.b "Photon, Sniper, Oriens, Leonard, Motion, Virgill",0," and everyone "
+	dc.b "I may have forgotten. If intentionally or not is for you to decide :) "
+	; 1900 characters left.
     dc.b ".....          ",$FF
 
     even    
@@ -3781,7 +3685,8 @@ TEXTLOADING6:
 TEXTMODULE6: ; 2000 characters
     dc.b "..... You are listening to ",1,"BALLADE",0," by ",1,"KOOPA",0," (2'42). Art by ",1,"FRA & ORIENS",0,"..... "
     dc.b 1,"KOOPA",0," on the keyboard. Last night, I fought this dragon. it was not an easy task. Unfortunately there were some losses amongst the team. Now a new day can begin and, I hope, an encounter with a peaceful life. Your humble servant..... "
-    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personal greetings:  ",1,"Locust2802, Rodrik, Bird/Syntex, Deckard, Wookie, friends of Deadliners Soundy, Made, Dascon, Dan and Facet from Lemon., Leonard & Mon from Oxygene, Ziggy Stardust",0,""
+    dc.b 1,"ORIENS",0," back on keyboard, now this is time for some personal greetings:  ",1,"Locust2802, Rodrik, Bird/Syntex, Deckard, Wookie, Parsec, friends of Deadliners Soundy, Made, Dascon, Dan & Facet from Lemon., Leonard & Mon from Oxygene, Ziggy Stardust.",0," "
+    dc.b "And of course my wife ",1,"Ana",0,", for understanding my passion for the Amiga. Love you."
     ; 1300 characters left.
     dc.b ".....          ",$FF
     
@@ -4116,8 +4021,6 @@ UpdateSteps:
     ; -- store result
     move.w d1,(a4)+ ; RGB color
     dbra d4,.loop
-
-    ;move.w d1,$102
     
     ; Copy all colors to copper
     
@@ -4612,129 +4515,6 @@ NullSprite:
   dc.l 0 ; Stop (4 bytes)
   blk.b 36,0 ; 36 bytes to get the 40 empty bytes
   
-; Below the full created sprite chain (3 are chained, for cursor and GUI)
-; Keep data below, as they are copied in the sprite zone (can go in fast mem)
-;SpriteTruck1a:
-;  Dc.w $225a,$3d00
-;  ; data
-;  dc.w $0000,$0000
-;  dc.w $03ff,$07ff
-;  dc.w $071c,$0000
-;  dc.w $0faa,$0114
-;  dc.w $01f4,$05ee
-;  dc.w $03ff,$04eb
-;  dc.w $0ff7,$01c7
-;  dc.w $0fef,$01c3
-;  dc.w $0d87,$03ce
-;  dc.w $098f,$03fc
-;  dc.w $09fb,$03d8
-;  dc.w $0de1,$03fc
-;  dc.w $09f8,$03d6
-;  dc.w $01c8,$0ddf
-;  dc.w $096e,$0217
-;  dc.w $0e04,$008a
-;  dc.w $07f8,$0003
-;  dc.w $0fff,$0000
-;  dc.w $0800,$07fe
-;  dc.w $07ff,$0800
-;  dc.w $0157,$0400
-;  dc.w $0400,$017c
-;  dc.w $0420,$0bd8
-;  dc.w $0001,$0e72
-;  dc.w $0820,$0489
-;  dc.w $00a0,$0d24
-;  dc.w $0000,$0140
-;  dc.w $18a0,$0941
-;  dc.w $1880,$b127
-;  dc.w $1c70,$6906
-;  dc.w $3c00,$d1fe
-;  dc.w $1c00,$6878
-;  dc.w $01fc,$aa8a
-;  dc.w $0000,$1555
-;  ;dc.w 0,0 ; stop
-;  ; Warning: DMA will chain with cursor sprite. So keep this here.
-
-;    
-;SpriteTruck1b:
-;  Dc.w	$225a,$3d00
-;  ; data
-;  dc.w $0fff,$0000
-;  dc.w $15ff,$0dff
-;  dc.w $1003,$0afb
-;  dc.w $163d,$07fb
-;  dc.w $1e5f,$0f5f
-;  dc.w $1fc7,$0fef
-;  dc.w $14db,$06ff
-;  dc.w $1593,$07b7
-;  dc.w $17cb,$05f3
-;  dc.w $17f5,$05c4
-;  dc.w $1592,$0d94
-;  dc.w $13fe,$09f2
-;  dc.w $15ff,$0df9
-;  dc.w $1fbc,$018c
-;  dc.w $14a7,$0cc6
-;  dc.w $1083,$0977
-;  dc.w $1003,$080c
-;  dc.w $1000,$0d71
-;  dc.w $1ffe,$0001
-;  dc.w $1800,$05f4
-;  dc.w $1600,$0ffe
-;  dc.w $117c,$0a83
-;  dc.w $1bf9,$0407
-;  dc.w $1d8c,$0000
-;  dc.w $1f46,$0070
-;  dc.w $1a23,$00d8
-;  dc.w $1f43,$00bc
-;  dc.w $0f42,$109c
-;  dc.w $1724,$a858
-;  dc.w $0e01,$7098
-;  dc.w $1e71,$e000
-;  dc.w $0f87,$7000
-;  dc.w $00f8,$ab06
-;  dc.w $0000,$1555
-;  dc.w 0,0 ; stop
-;
-;  
-;SpriteTruck2a:
-;  Dc.w	$225a,$3d00
-;  ; data
-;  dc.w $0000,$0000
-;  dc.w $ffff,$ffff
-;  dc.w $0f17,$1f7f
-;  dc.w $17ac,$0780
-;  dc.w $ec85,$1dc0
-;  dc.w $8fe7,$3ce7
-;  dc.w $7fce,$1c36
-;  dc.w $bbef,$1c16
-;  dc.w $1c87,$980e
-;  dc.w $8cc5,$3e0b
-;  dc.w $ac03,$16bd
-;  dc.w $9203,$4de3
-;  dc.w $54d7,$2be6
-;  dc.w $72c6,$b99e
-;  dc.w $7626,$b34e
-;  dc.w $025b,$d905
-;  dc.w $00f6,$bc01
-;  dc.w $eddb,$0000
-;  dc.w $0103,$fe08
-;  dc.w $8d5e,$5000
-;  dc.w $9e27,$0000
-;  dc.w $1bdf,$0000
-;  dc.w $1ef3,$0000
-;  dc.w $9ff7,$4000
-;  dc.w $9ff7,$2008
-;  dc.w $8fe5,$4000
-;  dc.w $0105,$a008
-;  dc.w $02a8,$fd55
-;  dc.w $0000,$01ff
-;  dc.w $7fff,$0000
-;  dc.w $ffff,$2aff
-;  dc.w $fd41,$52be
-;  dc.w $0000,$aaaa
-;  dc.w $0000,$5555
-;  ;dc.w 0,0 ; stop
-;  ; Warning: DMA will chain with cursor sprite. So keep this here.
-
 ;--------------------------------------------------------------
 LogoData:
     incbin  "data/logo_melodees.ami" ; 40 width wide, so pointing directly to it.
@@ -4745,8 +4525,7 @@ GuiData_End:
 ;--------------------------------------------------------------
 
 	data_f
-    
-     
+
     
 SpriteCursorDataOnly:
   ; data
@@ -5034,8 +4813,8 @@ Palette64_2:
     blk.b 64*3,0
 
     ; Loaded level
-;LoadedLevel:
-;    blk.b 64000 ; TODO Set this to max data size
+    ;LoadedLevel:
+    ;blk.b 64000 ; TODO Set this to max data size
     ;incbin "data/file.bin" ; All loaded data in one block.
     ; 32 bytes    : palette
     ; 12400 bytes : pictureparalax back  320x62x5   SIDE by SIDE

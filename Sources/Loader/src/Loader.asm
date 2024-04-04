@@ -1,15 +1,7 @@
 ;-----------------------------------------------------------------
 ; Loading
-; Oriens Fev18
+; Oriens 2018-2024
 ;-----------------------------------------------------------------
-
-;	PRINTT	'************CODE SIZE******************'
-;	PRINTV	endcode-begincode
-;	PRINTT	'************DATA VOLUTE SIZE******************'
-;	PRINTV	datavolutesize
-;	PRINTT	'************DATA BSS F******************'
-;	PRINTV	enddatabss-startdatabss
-	
 	
 NO_MEMORY_MANAGER = 1
 USE_SPRITES = 1
@@ -20,8 +12,7 @@ SLOWMO = 1
 
 	include "system.asm"	
 	include "copper.asm"
-    
-    
+
     code
 
 	include "../../LDOS/src/kernel.inc"	
@@ -31,11 +22,6 @@ SLOWMO = 1
 ; **************************************************************************
 	
 startup:
-;----------------------------------------------------------------
-	;move.b #1,$100
-    
-    ;move.l (LDOS_BASE).w,a6
-	;jsr		LDOS_MUSIC_START(a6)
     
 	; Erase BSS
 	lea		startdatabss,a0
@@ -122,12 +108,6 @@ FinalFade: ; Reverse count
 	dc.w	0
 VoluteEnd:
     dc.w    0
-    
-    
-;DURATIONFINALFADE=200	
-	
-;FrameCount: ; Global frame count
-;	dc.w	0
 
 ;----------------------------------------------------------------
 main_irq:	
@@ -416,31 +396,6 @@ drawVolute:
 	move.l 34(a0),6(a0)
 	move.l 38(a0),10(a0)
 	
-	; Translate local back to center (128,128) and update global coordinates
-	; Compute offset d0,d1 8:8
-	; Get int value and put it into global variable
-	;move.w 2(a0),d0
-	;sub.w #$8000,d0 ; -128
-	;move.w 4(a0),d1
-	;sub.w #$8000,d1 ; -128
-	; Mask float part
-	;and.w #$FF00,d0
-	;and.w #$FF00,d1
-	; Translate all points
-	; Current position
-	;sub.w d0,2(a0)
-	;sub.w d1,4(a0)
-	; Last draw points
-	;sub.w d0,6(a0)
-	;sub.w d1,8(a0)
-	;sub.w d0,10(a0)
-	;sub.w d1,12(a0)	
-	; Add offset to global 
-	;asr.w #8,d0 ; Keep sign with asr
-	;asr.w #8,d1
-	;add.w d0,42(a0)
-	;add.w d1,44(a0)
-	
 	rts
 
 ;---------------------------------------------------------------
@@ -448,24 +403,8 @@ drawVolute:
 evolveVolute:	
 	; Evolve values into structure. 
 	; Common part
-	;move.w 16(a0),d0
-	;add.w d0,14(a0) ; Change width 
-	;move.w 20(a0),d0
-	;add.w d0,18(a0) ; Change length 
 	move.w 24(a0),d0
 	add.w d0,22(a0) ; Change angle 
-	; Change angle speed
-	;move.w 46(a0),d0
-	;add.w d0,24(a0)
-	; Add lifetime
-	;add.w #1,48(a0)
-	; Call specific parts
-	;cmp.b #1,0(a0)
-	;beq evolveVoluteType1 ; Big Volute
-	;cmp.b #2,0(a0)
-	;beq evolveVoluteType2 ; Normal volute	
-	;cmp.b #3,0(a0)
-	;beq evolveVoluteType3
 	cmp.b #4,0(a0)
 	beq evolveVoluteType4 ; Circle
 	rts
@@ -626,16 +565,6 @@ computeminmax:
 	
 	cmp.w #0,d0
 	beq .exit	
-	; Erase mem (Cpu for now)
-	;clr.l d0
-	;move.w 24(a0),d0 ; bytes width
-	;mulu.w 26(a0),d0 ; Total number of lines
-	;lsr.l #1,d0 ; Total number of words
-	;sub.w #1,d0 ; For looping on correct number
-	;lea bobzone,a1
-;.eraseloop:
-	;move.w #0,(a1)+
-	;dbra d0,.eraseloop
 
 	; Erase mem, using blitter
 	lea bobzone,a1
@@ -954,59 +883,12 @@ dfm_palette_fade0:
 	move.w	d0,(a1)+
 	dbra	d4,.calCol ; Big loop
 	rts		
-	
-;---------------------------------------------------------------
-; Common code
-;---------------------------------------------------------------
-;---------------------------------------------------------------
-; Display Work value that is in d0
-;DisplayWord:
-;	movem.l	d0-d6/a0-a6,-(sp)
-;	Lea screen,a0
-;	add.l #3,a0 ; Start by end
-;	; Display one letter
-;	;move.w #$F0A9,d0
-;	;Add.l	#['1'-32]*8,a1	
-;	;Add.l	#'A'*8,a1
-;	move.w #4-1,d5
-;.bigloop
-;	move.w d0,d1
-;	and.l #$0000000F,d1
-;	move.l	#font8,a1
-;	cmp.w #$A,d1 ; Number or letter ?
-;	bge .letter
-;.number	
-	; Display a number.
-;	add.l #('0'-32),d1
-;	lsl.l #3,d1
-;	add.l d1,a1	
-;	bra .display
-;.letter	
-	; Display a letter A to F
-;	add.l #('A'-$A),d1
-;	lsl.l #3,d1
-;	add.l d1,a1
-;.display	
-;	move.l a0,a2 ; Screen
-;	Move.w	#8-1,d1
-;.n01
-;	Move.b	(a1)+,(a2)
-;	add.l	#40,a2
-;	;add.l	#80,a2
-;	dbra	d1,.n01
-;	lsr.w #4,d0 ; Do to next number
-;	sub.l #1,a0 ; Next letter on screen
-;	dbra d5,.bigloop
-;	movem.l	(sp)+,d0-d6/a0-a6
-;	rts
-;---------------------------------------------------------------
-	
+
 endcode:
 
 	bss_f
 ;---------------------------------------------------------------
 ;	data
-
 ;----------------------------------------------------------------	
 startdatabss:
 volute: ; Volute structure (x=offset)
@@ -1242,11 +1124,7 @@ screenend:
 bobzone:
 	ds.b 1024 ; This can be reduced to the size of the biggest block (do it at end)
 	
-;coprbase=$dff000
-;custom=coprbase
 dmaconr=2
-;joy0dat=$a
-;joy1dat=$c
 bltddat=$76
 bltadat=$74
 bltbdat=$72
@@ -1265,8 +1143,3 @@ bltaptl=$52
 bltbpth=$4c
 bltcpth=$48
 bltdpth=$54
-;cop1lch=$80
-;copjmp1=$88
-
-
-

@@ -15,7 +15,7 @@ copper:
 	dc.l	$009400d0
 	dc.w	$0096,$0020
 	dc.w	$0104,$0000
-	dc.w	$0100,$0000	; $dff100 = number of planes
+	dc.w	$0100,$0200	; $dff100 = number of planes. Bit #9, color for genlocked/scandoubled displays
 	dc.w	$0108,$0000
 	dc.w	$010A,$0000
 
@@ -64,7 +64,7 @@ pointer1:	dc.w	$00e0,$0000,$00e2,$0000
 ;PaletteGrey8:	dc.l 	$018E0000,$01900000,$01920000,$01940000,$01960000,$01980000,$019A0000,$019C0000,$019E0000 ; 9 grey colors
 
 	dc.l    $E9fdfffe ; 30 + 71 + 114
-	dc.w	$0100,$0000	; $dff100 = number of planes
+	dc.w	$0100,$0200	; $dff100 = number of planes
 	;dc.w	$0180,$0000
 	dc.l	$009c8010,$fffffffe	; end copper	
 ; ------------------------------------------------------------------
